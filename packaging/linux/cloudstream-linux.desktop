@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=CloudStream
+GenericName=Media Center
+Comment=Run CloudStream extensions on Linux
+Exec=@EXEC@ %u
+Icon=@ICON@
+Terminal=false
+Categories=AudioVideo;Video;Player;
+MimeType=x-scheme-handler/cloudstreamrepo;
+StartupWMClass=com-lagradost-cloudstream3-linux-MainKt
