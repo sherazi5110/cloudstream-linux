@@ -10,7 +10,13 @@ import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.utils.DataStore.getSharedPrefs
 import com.lagradost.cloudstream3.utils.extractorApis
 import android.content.res.Resources
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /** Same fields as upstream PluginData, plus the repository it came from. */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -34,12 +40,29 @@ class LoadedPlugin(
     val extractorCount: Int get() = extractorApis.count { it.sourcePlugin == instance.filename }
 }
 
+data class LoadProgress(val done: Int, val total: Int) {
+    val running: Boolean get() = done < total
+}
+
 object PluginManager {
     private const val PLUGINS_KEY = "PLUGINS_KEY"
     private val prefs get() = Platform.context.getSharedPrefs()
 
-    val loaded = LinkedHashMap<String, LoadedPlugin>()
-    val failures = LinkedHashMap<String, Throwable>()
+    val loaded = ConcurrentHashMap<String, LoadedPlugin>()
+    val failures = ConcurrentHashMap<String, Throwable>()
+
+    private val _progress = MutableStateFlow(LoadProgress(0, 0))
+    val progress: StateFlow<LoadProgress> = _progress
+
+    /** Bumped whenever the set of providers changes, so screens can refresh. */
+    private val _version = MutableStateFlow(0)
+    val version: StateFlow<Int> = _version
+    private fun changed() {
+        _version.value++
+    }
+
+    /** register* calls in Plugin.load mutate global lists; translation and class loading stay parallel. */
+    private val registerLock = Any()
 
     fun installed(): List<PluginData> =
         prefs.getString(PLUGINS_KEY, null)?.let { mapper.readValue<List<PluginData>>(it) } ?: emptyList()
@@ -52,18 +75,25 @@ object PluginManager {
         saveInstalled(installed().filter { it.internalName != data.internalName } + data)
     }
 
-    /** Loads every installed plugin, like upstream's loadAllOnlinePlugins + loadAllLocalPlugins. */
-    fun loadAll(): Map<String, Throwable> {
+    /**
+     * Loads every installed plugin, like upstream's loadAllOnlinePlugins + loadAllLocalPlugins,
+     * but in parallel: first-run .cs3 translation is CPU bound and dominates startup.
+     */
+    suspend fun loadAll(): Map<String, Throwable> = coroutineScope {
         Platform.init()
-        for (data in installed()) {
-            val file = File(data.filePath)
-            if (!file.exists()) {
-                failures[data.internalName] = IllegalStateException("Missing file ${data.filePath}")
-                continue
+        val all = installed()
+        _progress.value = LoadProgress(0, all.size)
+        all.map { data ->
+            async(Engine.dispatcher) {
+                val file = File(data.filePath)
+                if (!file.exists()) failures[data.internalName] = IllegalStateException("Missing file ${data.filePath}")
+                else loadPlugin(file, data)
+                _progress.value = _progress.value.let { it.copy(done = it.done + 1) }
             }
-            loadPlugin(file, data)
-        }
-        return failures
+        }.awaitAll()
+        System.err.println("I/plugins: loaded ${loaded.size}/${all.size} extensions")
+        changed()
+        failures
     }
 
     /** Port of upstream PluginManager.loadPlugin (app/.../plugins/PluginManager.kt). */
@@ -87,11 +117,14 @@ object PluginManager {
         instance.filename = file.absolutePath
         if (manifest.requiresResources) (instance as? Plugin)?.resources = Resources.EMPTY
 
-        if (instance is Plugin) instance.load(Platform.context) else instance.load()
+        synchronized(registerLock) {
+            if (instance is Plugin) instance.load(Platform.context) else instance.load()
+        }
 
         LoadedPlugin(data.copy(version = manifest.version ?: data.version), manifest, instance, loader).also {
             loaded[file.absolutePath] = it
             failures.remove(data.internalName)
+            changed()
         }
     }.onFailure {
         failures[data.internalName] = it
@@ -107,6 +140,7 @@ object PluginManager {
         APIHolder.allProviders.withLock { APIHolder.allProviders.removeAll { it.sourcePlugin == owner } }
         extractorApis.withLock { extractorApis.removeAll { it.sourcePlugin == owner } }
         runCatching { plugin.loader.close() }
+        changed()
     }
 
     /** Downloads (preferring the native .jar when the repo publishes one) and loads a plugin. */

@@ -17,8 +17,14 @@ dependencies {
     implementation("de.femtopedia.dex2jar:dex-translator:2.4.38")
     implementation("org.ow2.asm:asm:9.10.1")
     implementation("org.ow2.asm:asm-tree:9.10.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.11.0")
-    implementation("com.formdev:flatlaf:3.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-javafx:1.11.0")
+    // JavaFX 21 LTS (runs on the Java 21 Ubuntu ships); GPU-accelerated, CSS-styled UI.
+    val fxPlatform = if (System.getProperty("os.arch") == "aarch64") "linux-aarch64" else "linux"
+    for (module in listOf("base", "graphics", "controls")) {
+        implementation("org.openjfx:javafx-$module:21.0.8:$fxPlatform")
+    }
+    // Many streaming sites serve WebP posters, which JavaFX cannot decode itself.
+    implementation("com.github.usefulness:webp-imageio:0.11.0")
     testImplementation(kotlin("test"))
 }
 
@@ -39,8 +45,11 @@ tasks.test {
     useJUnitPlatform()
     // The tests load the example extension both as a real Dalvik .cs3 and as a cross-platform .jar.
     val repo = project(":examples:InternetArchiveProvider").layout.buildDirectory.dir("repo")
-    dependsOn(":examples:InternetArchiveProvider:makeRepo")
+    val demo = project(":tests:DemoProvider").layout.buildDirectory.dir("repo")
+    dependsOn(":examples:InternetArchiveProvider:makeRepo", ":tests:DemoProvider:makeRepo")
     systemProperty("example.repo", repo.get().asFile.absolutePath)
+    systemProperty("demo.repo", demo.get().asFile.absolutePath)
+    systemProperty("tests.dir", rootProject.file("tests").absolutePath)
     systemProperty("cloudstream.home", layout.buildDirectory.dir("test-home").get().asFile.absolutePath)
     jvmArgs("-XX:+UnlockDiagnosticVMOptions", "-XX:-BytecodeVerificationRemote")
 }
@@ -67,7 +76,7 @@ val packageDeb by tasks.registering(Exec::class) {
     commandLine(buildList {
         // -PjpackageType=app-image builds the unpacked app without dpkg/fakeroot.
         val type = (findProperty("jpackageType") as String?) ?: "deb"
-        addAll(listOf("jpackage", "--type", type, "--name", "cloudstream-linux", "--app-version", "1.0.0"))
+        addAll(listOf("jpackage", "--type", type, "--name", "cloudstream-linux", "--app-version", "2.0.0"))
         addAll(listOf("--input", lib.get().asFile.path, "--main-jar", "app.jar"))
         addAll(listOf("--main-class", application.mainClass.get(), "--dest", out.get().asFile.path))
         addAll(listOf("--resource-dir", resources.get().asFile.path))

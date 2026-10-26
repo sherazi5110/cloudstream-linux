@@ -13,4 +13,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "cloudstream-linux"
 include(":cs-library", ":android-shim", ":app")
-include(":examples:InternetArchiveProvider")
+include(":examples:InternetArchiveProvider", ":tests:DemoProvider")

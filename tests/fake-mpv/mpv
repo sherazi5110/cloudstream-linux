@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Stand-in for mpv in tests: logs its arguments and answers mpv's JSON IPC.
+
+Playback advances 30 s of media per real second over a 600 s file. Environment:
+FAKE_MPV_SECONDS (how long to run, default 4), FAKE_MPV_LOG (argument log file).
+"""
+import json, os, socket, sys, threading, time
+
+args = sys.argv[1:]
+log = os.environ.get("FAKE_MPV_LOG")
+if log:
+    with open(log, "a") as f:
+        f.write(json.dumps(args) + "\n")
+opt = lambda name: next((a.split("=", 1)[1] for a in args if a.startswith(f"--{name}=")), None)
+ipc, start = opt("input-ipc-server"), float(opt("start") or 0)
+duration, began = 600.0, time.time()
+position = lambda: min(duration, start + (time.time() - began) * 30)
+
+def serve(conn):
+    buf = b""
+    while True:
+        data = conn.recv(4096)
+        if not data:
+            return
+        buf += data
+        while b"\n" in buf:
+            line, buf = buf.split(b"\n", 1)
+            req = json.loads(line)
+            prop = req["command"][1]
+            value = position() if prop == "time-pos" else duration
+            conn.sendall((json.dumps({"event": "property-change"}) + "\n").encode())  # noise, like real mpv
+            conn.sendall((json.dumps({"data": value, "request_id": req["request_id"], "error": "success"}) + "\n").encode())
+
+if ipc:
+    server = socket.socket(socket.AF_UNIX)
+    server.bind(ipc)
+    server.listen()
+    threading.Thread(target=lambda: [threading.Thread(target=serve, args=(server.accept()[0],), daemon=True).start() for _ in iter(int, 1)], daemon=True).start()
+time.sleep(float(os.environ.get("FAKE_MPV_SECONDS", "4")))
+if ipc:
+    os.unlink(ipc)

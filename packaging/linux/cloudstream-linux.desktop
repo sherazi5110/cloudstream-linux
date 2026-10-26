@@ -8,4 +8,3 @@ Icon=@ICON@
 Terminal=false
 Categories=AudioVideo;Video;Player;
 MimeType=x-scheme-handler/cloudstreamrepo;
-StartupWMClass=com-lagradost-cloudstream3-linux-MainKt

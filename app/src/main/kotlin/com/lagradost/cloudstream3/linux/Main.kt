@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.CloudStreamApp
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.utils.Qualities
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import kotlin.system.exitProcess
@@ -25,6 +26,7 @@ private const val USAGE = """cloudstream-linux — run CloudStream extensions on
   links <provider> <url> [--item N]       resolve stream links for item N (default 1)
   play <provider> <url> [--item N] [--link N] [--player mpv|vlc|ffplay]
   key get <key> | key set <key> <value>   read/write the key store extensions use (CloudStreamApp.getKey)
+  doctor                                  print diagnostics for bug reports
 """
 
 fun main(args: Array<String>) {
@@ -32,9 +34,11 @@ fun main(args: Array<String>) {
     // the intent filter in upstream AndroidManifest.xml.
     val repoLink = args.firstOrNull()?.takeIf { it.startsWith("cloudstreamrepo://") || it.startsWith("https://cs.repo") }
     if (args.isEmpty() || args[0] == "gui" || repoLink != null) {
+        Logs.init()
         Platform.init()
-        PluginManager.loadAll()
-        com.lagradost.cloudstream3.linux.gui.launchGui(repoLink)
+        Network.init()
+        // The window opens immediately; extensions load in the background (see ui.AppWindow).
+        com.lagradost.cloudstream3.linux.ui.DesktopApp.launch(repoLink)
         return
     }
     val code = runBlocking { runCatching { cli(args.toList()) } }.fold({ it }, {
@@ -62,8 +66,9 @@ private suspend fun loadItem(api: MainAPI, url: String): LoadResponse =
 
 suspend fun cli(args: List<String>): Int {
     Platform.init()
+    Network.init()
     val pos = args.positional()
-    val needsPlugins = pos[0] in setOf("providers", "home", "search", "info", "links", "play")
+    val needsPlugins = pos[0] in setOf("providers", "home", "search", "info", "links", "play", "doctor")
     if (needsPlugins) PluginManager.loadAll().forEach { (n, e) -> System.err.println("warn: $n failed to load: $e") }
 
     when (pos[0]) {
@@ -106,14 +111,14 @@ suspend fun cli(args: List<String>): Int {
         "providers" -> Engine.providers().forEach {
             println("${it.name.padEnd(24)} ${it.lang}  ${it.supportedTypes.joinToString(",")}  ${it.mainUrl}  [${it.sourcePlugin?.let { f -> File(f).name } ?: "built-in"}]")
         }
-        "home" -> Engine.mainPage(requireProvider(pos[1])).forEach { list ->
+        "home" -> Engine.home(requireProvider(pos[1])).toList().sortedBy { it.index }.forEach { (_, list) ->
             println("== ${list.name}")
             list.list.forEach { println("  ${it.name}\t${it.url}") }
         }
         "search" -> {
             val apis = args.option("--provider")?.let { listOf(requireProvider(it)) } ?: Engine.providers()
-            Engine.search(pos.drop(1).joinToString(" "), apis).forEach { (api, r) ->
-                println("[${api.name}] ${r.name} (${r.type ?: "?"})\t${r.url}")
+            Engine.search(pos.drop(1).joinToString(" "), apis).collect { batch ->
+                batch.results.forEach { r -> println("[${batch.api.name}] ${r.name} (${r.type ?: "?"})\t${r.url}") }
             }
         }
         "info" -> {
@@ -129,7 +134,7 @@ suspend fun cli(args: List<String>): Int {
             val playables = Engine.playables(item)
             val index = (args.option("--item")?.toInt() ?: 1) - 1
             val playable = playables.getOrNull(index) ?: error("Item ${index + 1} not found (${playables.size} items)")
-            val result = Engine.links(api, playable.data)
+            val result = Engine.allLinks(api, playable.data)
             if (pos[0] == "links") {
                 result.links.forEachIndexed { i, l ->
                     println("${i + 1}. [${Qualities.getStringByInt(l.quality).ifEmpty { "?" }}] ${l.name} (${l.type})\n   ${l.url}")
@@ -139,13 +144,25 @@ suspend fun cli(args: List<String>): Int {
                 require(result.links.isNotEmpty()) { "No links found" }
                 val link = result.links[(args.option("--link")?.toInt() ?: 1) - 1]
                 val title = "${item.name} — ${playable.label}"
-                val process = Player.play(link, result.subtitles, title, args.option("--player") ?: Player.preferred)
-                return process.waitFor()
+                val session = Player.play(link, result.subtitles, title, args.option("--player") ?: Player.preferred)
+                return session.process.waitFor()
             }
         }
         "key" -> when (pos.getOrNull(1)) {
             "set" -> CloudStreamApp.setKey(pos[2], pos[3]).also { println("${pos[2]} = ${pos[3]}") }
             else -> println(CloudStreamApp.getKey<Any>(pos[2]) ?: "(unset)")
+        }
+        "doctor" -> {
+            println("java      ${System.getProperty("java.version")} (${System.getProperty("java.vendor")})")
+            println("data      ${AppDirs.data}")
+            println("log       ${Logs.file}")
+            println("players   ${Player.installed().ifEmpty { listOf("none — sudo apt install mpv") }.joinToString()}")
+            println("dns       ${Settings.dns.label}")
+            println("repos     ${RepositoryManager.getRepositories().size}")
+            println("plugins   ${PluginManager.loaded.size} loaded, ${PluginManager.failures.size} failed")
+            PluginManager.failures.forEach { (n, e) -> println("  FAILED $n: $e") }
+            println("providers ${Engine.providers().joinToString { it.name }}")
+            if (AndroidStubLoader.generated.isNotEmpty()) println("stubbed   ${AndroidStubLoader.generated.joinToString()}")
         }
         "help", "--help", "-h" -> print(USAGE)
         else -> {
