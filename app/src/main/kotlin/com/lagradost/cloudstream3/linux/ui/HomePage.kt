@@ -1,9 +1,9 @@
 package com.lagradost.cloudstream3.linux.ui
 
-import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageData
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.linux.Catalogs
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.Library
 import com.lagradost.cloudstream3.linux.PluginManager
@@ -42,11 +42,15 @@ fun backdrop(url: String?, headers: Map<String, String>? = null, darkness: Doubl
 }
 
 class HomePage : StackPane(), Refreshable {
-    private val chips = ChipGroup { i -> providers.getOrNull(i)?.let { select(it) } }
+    /** A chip: one extension, or the combined feed. */
+    private data class Source(val key: String, val label: String, val apis: List<MainAPI>)
+
+    private val chips = ChipGroup { i -> sources.getOrNull(i)?.let { select(it) } }
     private val body = VBox(34.0).apply { pad(8.0, 36.0, 40.0, 36.0) }
     private val sections = TreeMap<Int, Node>()
     private var providers: List<MainAPI> = emptyList()
-    private var current: MainAPI? = null
+    private var sources: List<Source> = emptyList()
+    private var current: Source? = null
     private var job: Job? = null
     private var hero: Node? = null
     private var heroIndex = Int.MAX_VALUE
@@ -55,11 +59,24 @@ class HomePage : StackPane(), Refreshable {
 
     init {
         val refresh = button(null, Icons.REFRESH, "btn-ghost") { current?.let { select(it, force = true) } }.tooltip("Reload")
-        val header = hbox(14.0, label("Home", "h2"), Region().apply { minWidth = 12.0 }, chips, spacer(), refresh).pad(22.0, 36.0, 10.0, 36.0)
+        val customize = button("Customize", Icons.TUNE, "btn-ghost") {
+            Nav.window.showOverlay(HomeManager(providers, null))
+        }.tooltip("Choose extensions and catalogs for Home").apply { id = "home-customize" }
+        // Chips scroll sideways instead of squeezing when many extensions are installed.
+        val chipScroll = javafx.scene.control.ScrollPane(chips).apply {
+            styleClass += "chip-scroll"
+            hbarPolicy = javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER
+            vbarPolicy = javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER
+            isFitToHeight = true
+            javafx.scene.layout.HBox.setHgrow(this, javafx.scene.layout.Priority.ALWAYS)
+        }
+        val header = hbox(14.0, label("Home", "h2"), Region().apply { minWidth = 12.0 }, chipScroll, customize, refresh).pad(22.0, 36.0, 10.0, 36.0)
         val scroll = pageScroll(VBox(header, body))
         children += scroll
         ui.launch { PluginManager.version.collect { refreshProviders() } }
         Library.onChange { ui.launch { if (scene != null) renderContinue() } }
+        // Saved in the Home manager: reload, opening whichever extension or feed was picked there.
+        Catalogs.onChange { ui.launch { current = null; refreshProviders(force = true) } }
     }
 
     override fun onShow() {
@@ -67,19 +84,23 @@ class HomePage : StackPane(), Refreshable {
         render()
     }
 
-    private fun refreshProviders() {
+    private fun refreshProviders(force: Boolean = false) {
         val fresh = Engine.providers().filter { it.hasMainPage }
-        if (fresh.map { it.name } == providers.map { it.name } && current != null) return
+        val feed = Catalogs.feedProviders(fresh).takeIf { Catalogs.multiFeed && it.isNotEmpty() }
+        val fresher = listOfNotNull(feed?.let { Source(FEED, "My feed", it) }) + fresh.map { Source(it.name, it.name, listOf(it)) }
+        if (!force && fresher == sources && current != null) return
         providers = fresh
-        val preferred = providers.indexOfFirst { it.name == (current?.name ?: Settings.lastHomeProvider) }.coerceAtLeast(0)
-        chips.setItems(providers.map { it.name }, preferred)
-        providers.getOrNull(preferred)?.let { select(it) } ?: render()
+        sources = fresher
+        val wanted = current?.key ?: Settings.lastHomeProvider
+        val preferred = sources.indexOfFirst { it.key == wanted }.coerceAtLeast(0)
+        chips.setItems(sources.map { it.label }, preferred)
+        sources.getOrNull(preferred)?.let { select(it, force = true) } ?: run { current = null; render() }
     }
 
-    private fun select(api: MainAPI, force: Boolean = false) {
-        if (api == current && !force) return
-        current = api
-        Settings.lastHomeProvider = api.name
+    private fun select(source: Source, force: Boolean = false) {
+        if (source == current && !force) return
+        current = source
+        Settings.lastHomeProvider = source.key
         job?.cancel()
         sections.clear()
         hero = null
@@ -87,10 +108,11 @@ class HomePage : StackPane(), Refreshable {
         loading = true
         render()
         job = ui.launch {
-            Engine.home(api).collect { (index, list) ->
+            val mixed = source.apis.size > 1
+            Engine.home(source.apis).collect { row ->
                 // Feature the first item of the first section, whichever order sections arrive in.
-                if (index < heroIndex) list.list.firstOrNull()?.let { hero = hero(api, it); heroIndex = index }
-                sections[index] = shelf(api, index, list)
+                if (row.order < heroIndex) row.list.list.firstOrNull()?.let { hero = hero(row.api, it); heroIndex = row.order }
+                sections[row.order] = shelf(row, mixed)
                 render()
             }
             loading = false
@@ -126,16 +148,25 @@ class HomePage : StackPane(), Refreshable {
             if (sections.isEmpty()) repeat(3) { nodes += skeletonShelf() }
             else nodes += hbox(10.0, ProgressIndicator().apply { setPrefSize(18.0, 18.0) }, label("Loading more sections…", "muted"))
         } else if (current != null && sections.isEmpty()) {
-            nodes += emptyState(Icons.INFO, "Nothing here", "${current?.name} returned no home sections. Its site may be down or blocked — try Settings → DNS, or use Search.")
+            val all = current?.apis.orEmpty()
+            nodes += if (all.isNotEmpty() && all.all { Catalogs.enabled(it).isEmpty() }) emptyState(Icons.TUNE, "All catalogs are hidden",
+                "You turned off every catalog for ${current?.label}.",
+                button("Customize", Icons.TUNE, "btn-accent") { Nav.window.showOverlay(HomeManager(providers, all.singleOrNull())) })
+            else emptyState(Icons.INFO, "Nothing here", "${current?.label} returned no home sections. Its site may be down or blocked — try Settings → Network & DNS, or use Search.")
         }
         body.children.setAll(nodes)
     }
 
-    private fun shelf(api: MainAPI, index: Int, list: HomePageList): Node {
-        val section = api.mainPage.getOrNull(index / 100)
-        return Shelf(list.name, onViewAll = section?.let { { Nav.window.push(GridPage(api, list.name, it, list.list)) } }).apply {
+    private fun shelf(row: Engine.HomeSection, mixed: Boolean): Node {
+        val (_, api, section, list) = row
+        return Shelf(list.name, onViewAll = { Nav.window.push(GridPage(api, list.name, section, list.list)) },
+            trailing = if (mixed) label(api.name, "tag") else null).apply {
             list.list.forEach { item -> add(PosterCard.of(item) { Nav.open(api, item) }) }
         }
+    }
+
+    companion object {
+        const val FEED = "__feed__"
     }
 
     private fun hero(api: MainAPI, item: SearchResponse): Node {

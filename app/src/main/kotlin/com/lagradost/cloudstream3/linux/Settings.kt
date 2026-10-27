@@ -23,7 +23,7 @@ object Settings {
         prefs.edit().putString(key, value.toString()).apply()
     }
 
-    /** builtin = mpv inside the app window; mpv = mpv in its own window; vlc; ffplay. */
+    /** builtin = the in-app VLC-based player; mpv = mpv in its own window; vlc; ffplay. */
     var player: String
         get() = string("player", "builtin").let { if (it == "mpv" || it in Player.supported || it == "builtin") it else "builtin" }
         set(v) = put("player", v)
@@ -73,6 +73,16 @@ object Settings {
     var autoUpdateExtensions: Boolean
         get() = string("auto_update_extensions", "true").toBoolean()
         set(v) = put("auto_update_extensions", v)
+
+    /** Built-in player volume, 0–150 (VLC allows boosting above 100). */
+    var playerVolume: Int
+        get() = string("player_volume", "100").toIntOrNull()?.coerceIn(0, 150) ?: 100
+        set(v) = put("player_volume", v)
+
+    /** Built-in player zoom mode, a [com.lagradost.cloudstream3.linux.ui.Zoom] name. */
+    var playerZoom: String
+        get() = string("player_zoom", "FIT")
+        set(v) = put("player_zoom", v)
 
     var lastHomeProvider: String?
         get() = prefs.getString("last_home_provider", null)

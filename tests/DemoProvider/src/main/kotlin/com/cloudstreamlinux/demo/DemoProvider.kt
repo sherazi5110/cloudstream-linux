@@ -122,6 +122,11 @@ class DemoProvider : MainAPI() {
         subtitleCallback(newSubtitleFile("English", "$mainUrl/download/night_of_the_test_pattern/test_film.en.srt"))
         // Extractor 1: instant.
         callback(newExtractorLink("FastHost", "FastHost 720p", file, ExtractorLinkType.VIDEO) { quality = 720; referer = "$mainUrl/" })
+        // Extractor 4: HLS that needs a custom header on the playlist and every segment.
+        callback(newExtractorLink("TokenHost", "TokenHost HLS", "$mainUrl/hls/master.m3u8", ExtractorLinkType.M3U8) {
+            quality = 480
+            headers = mapOf("X-CS-Token" to "demo", "Origin" to mainUrl)
+        })
         // Extractor 2: a slow host that answers after 8 seconds.
         launch {
             app.get("$mainUrl/slow?s=8")

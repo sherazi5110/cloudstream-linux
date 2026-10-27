@@ -37,7 +37,7 @@ import kotlin.system.exitProcess
 
 object AppInfo {
     const val NAME = "CloudStream for Linux"
-    const val VERSION = "3.0.0"
+    const val VERSION = "4.0.0"
     const val CREDIT = "Tennant Creek"
 }
 
@@ -125,7 +125,7 @@ class AppWindow(val stage: Stage) : StackPane() {
         Theme.onChange { applyTheme() }
 
         addEventFilter(KeyEvent.KEY_PRESSED) { e ->
-            (playerLayer.children.firstOrNull() as? PlayerSurface)?.let { it.handle(e); return@addEventFilter }
+            (playerLayer.children.firstOrNull() as? PlayerKeys)?.let { it.handle(e); return@addEventFilter }
             when {
                 e.code == KeyCode.ESCAPE -> { if (closeOverlay() || back()) e.consume() }
                 e.code == KeyCode.F11 -> { stage.isFullScreen = !stage.isFullScreen; e.consume() }
@@ -140,9 +140,9 @@ class AppWindow(val stage: Stage) : StackPane() {
 
     /** Floating dock with labelled icons; fullscreen toggle at the bottom. */
     private fun dock(): Node {
-        val logo = StackPane(icon(Icons.PLAY, 20.0)).apply {
+        val logo = StackPane(ImageView(Image(AppWindow::class.java.getResourceAsStream("/ui/icon.png"), 48.0, 48.0, true, true))).apply {
             styleClass += "dock-logo"
-            setMinSize(44.0, 44.0); setMaxSize(44.0, 44.0)
+            setMinSize(48.0, 48.0); setMaxSize(48.0, 48.0)
         }
         val dock = VBox(4.0, logo, Region().apply { minHeight = 10.0 }).apply {
             styleClass += "dock"

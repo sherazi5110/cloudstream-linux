@@ -62,8 +62,7 @@
     -fx-spacing: 4;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 24, 0.1, 0, 6);
 }
-.dock-logo { -fx-background-color: -cs-accent; -fx-background-radius: 14; }
-.dock-logo .icon { -fx-background-color: white; }
+.dock-logo { -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.35), 10, 0.15, 0, 3); }
 .dock-item {
     -fx-background-color: transparent;
     -fx-background-radius: 14;
@@ -405,3 +404,99 @@
 .dialog-pane .header-panel { -fx-background-color: -cs-surface-2; }
 .dialog-pane .button { -fx-background-color: -cs-surface-3; -fx-text-fill: -cs-text; -fx-background-radius: 8; }
 .dialog-pane .button:default { -fx-background-color: -cs-accent; -fx-text-fill: white; }
+
+/* ---------- home manager ---------- */
+.chip-scroll, .chip-scroll > .viewport { -fx-background-color: transparent; -fx-background-insets: 0; -fx-padding: 0; }
+.provider-card {
+    -fx-background-color: -cs-surface-2;
+    -fx-background-radius: 14;
+    -fx-border-color: -cs-line; -fx-border-radius: 14;
+    -fx-padding: 12 12 12 12;
+    -fx-cursor: hand;
+}
+.provider-card:hover { -fx-border-color: -cs-accent-glow; }
+.provider-card.selected { -fx-background-color: -cs-accent-soft; -fx-border-color: -cs-accent; }
+.provider-badge {
+    -fx-background-color: -cs-accent;
+    -fx-background-radius: 10;
+    -fx-min-width: 40; -fx-min-height: 40; -fx-max-width: 40; -fx-max-height: 40;
+    -fx-alignment: center;
+    -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 13px;
+}
+.feed-number {
+    -fx-background-color: -cs-accent; -fx-background-radius: 999;
+    -fx-min-width: 24; -fx-min-height: 24; -fx-alignment: center;
+    -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 11.5px;
+}
+.catalog-row {
+    -fx-background-color: -cs-surface-2;
+    -fx-background-radius: 12;
+    -fx-border-color: -cs-line; -fx-border-radius: 12;
+    -fx-padding: 10 14 10 12;
+}
+.catalog-row.off { -fx-background-color: -cs-surface; }
+.catalog-row.drop-target { -fx-border-color: -cs-accent; -fx-border-width: 2; }
+.drag-handle { -fx-background-color: -cs-faint; -fx-cursor: move; }
+
+/* ---------- built-in player ---------- */
+.builtin-player { -fx-background-color: black; }
+.player-top {
+    -fx-padding: 18 24 40 18;
+    -fx-background-color: linear-gradient(to bottom, rgba(0,0,0,0.78), rgba(0,0,0,0));
+}
+.player-bottom {
+    -fx-padding: 40 22 16 22;
+    -fx-background-color: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0));
+}
+.player-title { -fx-text-fill: white; -fx-font-size: 18px; -fx-font-weight: bold; }
+.player-subtitle { -fx-text-fill: rgba(255,255,255,0.7); -fx-font-size: 12.5px; }
+.player-chip {
+    -fx-background-color: rgba(255,255,255,0.12); -fx-background-radius: 999;
+    -fx-padding: 5 12 5 12; -fx-text-fill: rgba(255,255,255,0.85); -fx-font-size: 12px;
+}
+.player-chip:empty { -fx-opacity: 0; }
+.player-time { -fx-text-fill: white; -fx-font-size: 13px; -fx-font-family: "monospace"; }
+.player-time-sep { -fx-text-fill: rgba(255,255,255,0.5); }
+.player-button {
+    -fx-background-color: transparent; -fx-background-radius: 999;
+    -fx-padding: 8; -fx-cursor: hand;
+}
+.player-button .icon, .player-button > .region { -fx-background-color: white; }
+.player-button:hover { -fx-background-color: rgba(255,255,255,0.14); }
+.player-button:pressed { -fx-background-color: -cs-accent-soft; }
+.player-osd {
+    -fx-background-color: rgba(0,0,0,0.72); -fx-background-radius: 12;
+    -fx-padding: 10 18 10 18; -fx-text-fill: white; -fx-font-size: 15px;
+    -fx-translate-y: 90;
+}
+.player-volume .track { -fx-background-color: rgba(255,255,255,0.25); }
+.player-volume .thumb { -fx-background-color: white; }
+.seek-bar { -fx-cursor: hand; }
+.seek-track { -fx-background-color: rgba(255,255,255,0.22); -fx-background-radius: 3; -fx-max-height: 5; -fx-min-height: 5; }
+.seek-fill { -fx-background-color: -cs-accent; -fx-background-radius: 3; }
+.seek-knob { -fx-background-color: -cs-accent; -fx-background-radius: 999; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.6), 6, 0.2, 0, 1); }
+.seek-bar:hover .seek-track { -fx-max-height: 7; -fx-min-height: 7; }
+.seek-preview {
+    -fx-background-color: rgba(0,0,0,0.8); -fx-background-radius: 7;
+    -fx-padding: 4 8 4 8; -fx-text-fill: white; -fx-font-size: 12px;
+}
+.player-menu {
+    -fx-background-color: rgba(16,16,22,0.94);
+    -fx-background-radius: 16;
+    -fx-border-color: rgba(255,255,255,0.08); -fx-border-radius: 16;
+    -fx-padding: 12 10 12 10;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.6), 30, 0.2, 0, 8);
+}
+.player-menu-scroll, .player-menu-scroll > .viewport { -fx-background-color: transparent; -fx-background-insets: 0; -fx-padding: 0; }
+.player-menu-title { -fx-text-fill: white; -fx-font-size: 15px; -fx-font-weight: bold; -fx-padding: 0 0 4 8; }
+.player-menu-row { -fx-background-radius: 10; -fx-padding: 9 10 9 10; -fx-cursor: hand; }
+.player-menu-row:hover { -fx-background-color: rgba(255,255,255,0.08); }
+.player-menu-row.active { -fx-background-color: -cs-accent-soft; }
+.player-menu-row.muted .player-menu-item { -fx-text-fill: rgba(255,255,255,0.45); }
+.player-menu-row.disabled { -fx-cursor: default; }
+.player-menu-row.disabled:hover { -fx-background-color: transparent; }
+.player-menu-row.disabled .player-menu-item { -fx-text-fill: rgba(255,255,255,0.55); -fx-font-size: 12.5px; }
+.player-menu-row .icon, .player-menu-row > .region { -fx-background-color: rgba(255,255,255,0.8); }
+.player-menu-row .accent-icon { -fx-background-color: -cs-accent; }
+.player-menu-item { -fx-text-fill: white; -fx-font-size: 13.5px; }
+.player-menu-hint { -fx-text-fill: rgba(255,255,255,0.55); -fx-font-size: 11.5px; }

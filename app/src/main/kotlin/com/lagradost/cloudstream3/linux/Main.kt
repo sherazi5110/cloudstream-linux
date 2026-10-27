@@ -112,9 +112,9 @@ suspend fun cli(args: List<String>): Int {
         "providers" -> Engine.providers().forEach {
             println("${it.name.padEnd(24)} ${it.lang}  ${it.supportedTypes.joinToString(",")}  ${it.mainUrl}  [${it.sourcePlugin?.let { f -> File(f).name } ?: "built-in"}]")
         }
-        "home" -> Engine.home(requireProvider(pos[1])).toList().sortedBy { it.index }.forEach { (_, list) ->
-            println("== ${list.name}")
-            list.list.forEach { println("  ${it.name}\t${it.url}") }
+        "home" -> Engine.home(listOf(requireProvider(pos[1]))).toList().sortedBy { it.order }.forEach { row ->
+            println("== ${row.list.name}")
+            row.list.list.forEach { println("  ${it.name}\t${it.url}") }
         }
         "search" -> {
             val apis = args.option("--provider")?.let { listOf(requireProvider(it)) } ?: Engine.providers()

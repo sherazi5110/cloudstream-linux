@@ -74,12 +74,21 @@ object Engine {
     }
 
     /** Home sections in mainPage order; each one is emitted with its index as soon as it loads. */
-    fun home(api: MainAPI): Flow<IndexedValue<HomePageList>> = channelFlow {
-        api.mainPage.forEachIndexed { index, section ->
-            launch(dispatcher) {
-                val response = homePage(api, section, 1)
-                response?.items?.filter { it.list.isNotEmpty() }?.forEachIndexed { i, list ->
-                    send(IndexedValue(index * 100 + i, list))
+    /** One loaded home row. [order] sorts rows: provider position, then the user's catalog order. */
+    data class HomeSection(val order: Int, val api: MainAPI, val section: MainPageData, val list: HomePageList)
+
+    /**
+     * Home rows for [apis] (one, or several for the combined feed), using each extension's
+     * enabled catalogs in the user's order. Rows arrive as soon as each catalog loads.
+     */
+    fun home(apis: List<MainAPI>): Flow<HomeSection> = channelFlow {
+        apis.forEachIndexed { p, api ->
+            Catalogs.enabled(api).forEachIndexed { position, entry ->
+                launch(dispatcher) {
+                    val response = homePage(api, entry.section, 1)
+                    response?.items?.filter { it.list.isNotEmpty() }?.forEachIndexed { i, list ->
+                        send(HomeSection(p * 1_000_000 + position * 100 + i, api, entry.section, list))
+                    }
                 }
             }
         }

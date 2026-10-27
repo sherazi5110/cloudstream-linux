@@ -57,7 +57,7 @@ class StreamingTest {
         val firstLinkMs = links.first().first
         val doneMs = timeline.last().first
         assertTrue(firstLinkMs < 3_000, "first source took ${firstLinkMs}ms")
-        assertEquals(listOf("FastHost", "SlowHost"), links.map { (it.second as LinkEvent.Link).link.source })
+        assertEquals(listOf("FastHost", "TokenHost", "SlowHost"), links.map { (it.second as LinkEvent.Link).link.source })
         assertTrue(timeline.last().second is LinkEvent.Done)
         assertTrue(doneMs < 65_000, "search ended after ${doneMs}ms")
     }
@@ -65,7 +65,7 @@ class StreamingTest {
     @Test
     fun `home sections and search stream per provider`() = runBlocking {
         val api = demo()
-        val sections = Engine.home(api).toList()
+        val sections = Engine.home(listOf(api)).toList()
         assertEquals(3, sections.size)
         val batches = Engine.search("pixel", listOf(api)).toList()
         assertEquals(listOf("Pixel City", "His Girl Pixel"), batches.single().results.map { it.name })

@@ -8,7 +8,7 @@ import java.io.File
  * don't break the embedded player, and vice versa.
  */
 object MpvConfig {
-    private const val REVISION = "uosc-5.13.0/cs-9"
+    private const val REVISION = "uosc-5.13.0/cs-10"
 
     val dir: File get() = File(AppDirs.data, "mpv")
 

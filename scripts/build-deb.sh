@@ -27,13 +27,15 @@ Section: video
 Priority: optional
 Architecture: $ARCH
 Installed-Size: $(du -sk "$STAGE" | cut -f1)
-Depends: libgtk-3-0t64 | libgtk-3-0, libgl1, libx11-6, libxtst6, mpv
+Depends: libgtk-3-0t64 | libgtk-3-0, libgl1, libx11-6, libxtst6, libvlc5, vlc-plugin-base
+Recommends: mpv
 Suggests: vlc, ffmpeg
 Maintainer: cloudstream-linux <cloudstream-linux@users.noreply.github.com>
 Homepage: https://github.com/recloudstream/cloudstream
 Description: Run CloudStream extensions on Linux
  Media center that installs and runs CloudStream extensions from the same
- repositories the Android app uses, and plays streams in mpv.
+ repositories the Android app uses, and plays streams in its built-in
+ player (libVLC: every format VLC plays, online subtitles, source switching).
 CONTROL
 
 cat > "$STAGE/DEBIAN/postinst" <<'POSTINST'

@@ -17,11 +17,6 @@ import com.lagradost.cloudstream3.linux.WatchEntry
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkPlayList
 import com.lagradost.cloudstream3.utils.Qualities
-import javafx.geometry.Pos
-import javafx.scene.control.ProgressIndicator
-import javafx.scene.input.KeyCode
-import javafx.scene.input.KeyEvent
-import javafx.scene.layout.StackPane
 import javafx.stage.FileChooser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -84,9 +79,8 @@ class SourceCollector(private val api: MainAPI, private val playable: Playable) 
 }
 
 /**
- * One playback in mpv. In built-in mode mpv renders straight into the app window
- * (--wid), so video stays GPU-decoded and composited by mpv itself (the cheapest path
- * for 4K), while uosc draws the themed controls. The app drives everything over IPC.
+ * One playback in mpv, in its own window (Settings → Player → mpv). uosc draws the
+ * controls; the app drives sources, subtitles and progress over mpv's JSON IPC.
  */
 class PlayerSession(
     private val api: MainAPI,
@@ -94,15 +88,13 @@ class PlayerSession(
     private val playable: Playable,
     private val sources: SourceCollector,
     private var current: ExtractorLink,
-) {
+) : ActivePlayer {
     private val debug = System.getenv("CS_DEBUG_PLAYER") != null
     private val all = Engine.playables(response)
     private val next = all.getOrNull(all.indexOfFirst { it.data == playable.data } + 1)?.takeIf { it.dub == playable.dub }
     private val title = Playback.title(response, playable, all.size)
     private lateinit var process: Process
     private var ipc: MpvIpc? = null
-    private val surface = PlayerSurface()
-    private var embedded = false
     private var position = 0.0
     private var duration = 0.0
     private var saved = -100.0
@@ -114,11 +106,6 @@ class PlayerSession(
     private var retryWhenAvailable = false
 
     fun start() {
-        val stage = Nav.window.stage
-        val xid = if (Settings.player == "builtin") NativeWindow.xid(stage) else null
-        embedded = xid != null
-        if (Settings.player == "builtin" && xid == null) Toasts.show("Couldn't embed the player; opening it in its own window")
-
         val resume = Library.progress(api.name, playable.data)?.takeIf { it.duration > 0 && it.position / it.duration < 0.92 }?.position
         val socket = Files.createTempFile("cs-mpv-", ".sock").also { Files.delete(it) }
         val config = MpvConfig.install()
@@ -126,7 +113,6 @@ class PlayerSession(
             add("mpv")
             add("--config-dir=${config.absolutePath}")
             add("--input-ipc-server=$socket")
-            xid?.let { add("--wid=$it") }
             // Non-ASCII titles are sent over IPC (always UTF-8), not argv (locale-dependent).
             add("--force-media-title=" + title.filter { it.code < 128 })
             add("--input-vo-keyboard=yes")
@@ -139,17 +125,12 @@ class PlayerSession(
             addAll(Settings.mpvArgs.split(Regex("\\s+")).filter { it.isNotBlank() })
             add(urls(current).first())
         }
-        if (embedded) Nav.window.enterPlayer(surface)
         ui.launch {
             try {
                 process = withContext(Dispatchers.IO) {
                     ProcessBuilder(cmd)
                         .redirectErrorStream(true)
                         .redirectOutput(File(AppDirs.data, "logs/player.log").apply { parentFile.mkdirs() })
-                        .apply {
-                            // Embedding needs mpv on X11 (JavaFX runs on X11/XWayland too).
-                            if (embedded) environment().remove("WAYLAND_DISPLAY")
-                        }
                         .start()
                 }
                 ipc = withContext(Dispatchers.IO) { MpvIpc.connect(socket, process) }
@@ -195,12 +176,6 @@ class PlayerSession(
         ipc.set("force-media-title", title)
         ipc.observe(1, "time-pos")
         ipc.observe(2, "duration")
-        ipc.observe(3, "fullscreen")
-        if (embedded) {
-            ipc.set("fullscreen", Nav.window.stage.isFullScreen)
-            Nav.window.stage.fullScreenProperty().addListener { _, _, v -> if (!ipc.closed) ipc.set("fullscreen", v) }
-            surface.forward = { key -> ipc.command("keypress", key) }
-        }
         updateUserData()
         sources.onUpdate {
             updateUserData()
@@ -240,14 +215,13 @@ class PlayerSession(
                 }
             }
             "duration" -> (value as? Number)?.toDouble()?.let { duration = it }
-            "fullscreen" -> if (embedded && value is Boolean && Nav.window.stage.isFullScreen != value) Nav.window.stage.isFullScreen = value
         }
     }
 
     private fun onMessage(args: JSONArray?) {
         val ipc = ipc ?: return
         when (args?.optString(0)) {
-            "cs-back" -> if (embedded && Nav.window.stage.isFullScreen) Nav.window.stage.isFullScreen = false else quit()
+            "cs-back" -> quit()
             "cs-sources" -> openSourcesMenu()
             "cs-play-source" -> menuLinks.getOrNull(args.optString(1).toIntOrNull() ?: -1)?.let { switchTo(it, keepPosition = true) }
             "cs-load-sub" -> loadSubtitleFile()
@@ -398,7 +372,7 @@ class PlayerSession(
     }
 
     /** Stops playback; [then] runs once mpv has exited. */
-    fun quit(then: (() -> Unit)? = null) {
+    override fun quit(then: (() -> Unit)?) {
         leaving = then
         ipc?.command("quit") ?: runCatching { process.destroy() }
     }
@@ -407,10 +381,6 @@ class PlayerSession(
         record()
         ipc?.close()
         sources.cancel()
-        if (embedded) {
-            if (Nav.window.stage.isFullScreen) Nav.window.stage.isFullScreen = false
-            Nav.window.exitPlayer(surface)
-        }
         Playback.active = null
         val then = leaving
         when {
@@ -421,37 +391,5 @@ class PlayerSession(
             duration <= 0 && runCatching { process.exitValue() }.getOrDefault(0) != 0 ->
                 Toasts.show("The player couldn't open this stream", "Try another source" to { Playback.open(api, response, playable, chooseManually = true) }, 10.0)
         }
-    }
-}
-
-/**
- * What the app shows while mpv covers the window: a black surface (no animations, so
- * JavaFX stays idle and the GPU is free for video) that forwards keys to mpv.
- */
-class PlayerSurface : StackPane() {
-    var forward: ((String) -> Unit)? = null
-
-    /** Called by AppWindow for every key while playing, whatever node has focus. */
-    fun handle(e: KeyEvent) {
-        mpvKey(e)?.let { forward?.invoke(it); e.consume() }
-    }
-
-    init {
-        style = "-fx-background-color: black;"
-        isFocusTraversable = true
-        children += vbox(12.0, ProgressIndicator().apply { setPrefSize(34.0, 34.0) }, label("Opening stream…", "muted")).apply { alignment = Pos.CENTER }
-
-    }
-
-    private fun mpvKey(e: KeyEvent): String? = when (e.code) {
-        KeyCode.SPACE -> "SPACE"
-        KeyCode.LEFT -> "LEFT"
-        KeyCode.RIGHT -> "RIGHT"
-        KeyCode.UP -> "UP"
-        KeyCode.DOWN -> "DOWN"
-        KeyCode.ESCAPE -> "ESC"
-        KeyCode.BACK_SPACE -> "BS"
-        KeyCode.ENTER -> "ENTER"
-        else -> e.text.takeIf { it.length == 1 && !it[0].isWhitespace() }
     }
 }

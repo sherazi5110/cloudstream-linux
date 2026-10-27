@@ -32,7 +32,7 @@ import kotlin.math.abs
 
 /** Starting playback: find sources on the loading screen, then hand over to the player. */
 object Playback {
-    var active: PlayerSession? = null
+    var active: ActivePlayer? = null
 
     fun open(api: MainAPI, response: LoadResponse, playable: Playable, chooseManually: Boolean = false) {
         if (active != null) return
@@ -44,7 +44,13 @@ object Playback {
 
     fun start(api: MainAPI, response: LoadResponse, playable: Playable, sources: SourceCollector, link: ExtractorLink) {
         Nav.window.closeOverlay()
-        if (Settings.player == "builtin" || Settings.player == "mpv") {
+        val builtin = Settings.player == "builtin" && Vlc.factory != null
+        if (Settings.player == "builtin" && !builtin) {
+            Toasts.show("The built-in player needs VLC's libraries: sudo apt install vlc. Using mpv for now.", seconds = 10.0)
+        }
+        if (builtin) {
+            active = BuiltinPlayer(api, response, playable, sources, link).also { it.start() }
+        } else if (Settings.player == "builtin" || Settings.player == "mpv") {
             active = PlayerSession(api, response, playable, sources, link).also { it.start() }
         } else {
             sources.cancel()

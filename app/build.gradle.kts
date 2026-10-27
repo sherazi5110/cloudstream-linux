@@ -25,6 +25,8 @@ dependencies {
     }
     // Many streaming sites serve WebP posters, which JavaFX cannot decode itself.
     implementation("com.github.usefulness:webp-imageio:0.11.0")
+    // Built-in player: libVLC 3 (from the system's VLC packages) through JNA.
+    implementation("uk.co.caprica:vlcj:4.12.1")
     testImplementation(kotlin("test"))
 }
 
@@ -104,12 +106,12 @@ val packageDeb by tasks.registering(Exec::class) {
         addAll(listOf("--add-modules", listOf(
             "java.base", "java.desktop", "java.logging", "java.management", "java.naming", "java.net.http",
             "java.prefs", "java.scripting", "java.sql", "java.xml", "jdk.charsets", "jdk.crypto.ec",
-            "jdk.localedata", "jdk.unsupported", "jdk.zipfs",
+            "jdk.localedata", "jdk.unsupported", "jdk.zipfs", "jdk.httpserver",
         ).joinToString(",")))
         if (type == "deb") {
             addAll(listOf("--linux-shortcut", "--linux-menu-group", "AudioVideo;Video", "--linux-app-category", "video"))
             addAll(listOf("--linux-deb-maintainer", "cloudstream-linux@users.noreply.github.com"))
-            addAll(listOf("--linux-package-deps", "mpv | vlc | ffmpeg"))
+            addAll(listOf("--linux-package-deps", "libvlc5, vlc-plugin-base"))
         }
         application.applicationDefaultJvmArgs.forEach { addAll(listOf("--java-options", it)) }
     })

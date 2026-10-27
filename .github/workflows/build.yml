@@ -24,9 +24,14 @@ jobs:
       - name: Fetch pinned upstream sources
         run: ./scripts/fetch-upstream.sh
 
+      - name: Install players
+        # libVLC for the built-in player test, mpv for the mpv IPC tests.
+        run: sudo apt-get update && sudo apt-get install -y libvlc5 vlc-plugin-base mpv
+
       - name: Test
         # Loads real .cs3/.jar extensions, checks the Android shims, streaming sources
-        # against a mock site with a dead host, and mpv IPC progress tracking.
+        # against a mock site with a dead host, the header proxy, online subtitles,
+        # catalogs, libVLC playback of a protected HLS stream, and mpv IPC.
         run: ./gradlew :app:test
 
       - name: Build .deb and tarball
