@@ -77,7 +77,24 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(403, "referer required", "text/plain")
             sys.stderr.write(f"SERVED {self.path} Referer={self.headers.get('Referer')} UA={self.headers.get('User-Agent','')[:40]}\n")
             ctype = "video/mp4" if path.endswith(".mp4") else "text/plain"
-            return self.send(200, open(path, "rb").read(), ctype)
+            data = open(path, "rb").read()
+            rng = self.headers.get("Range", "")
+            if rng.startswith("bytes="):
+                # Range requests, like real video hosts: players seek with these.
+                start_s, _, end_s = rng[6:].partition("-")
+                start = int(start_s or 0)
+                end = min(int(end_s) if end_s else len(data) - 1, len(data) - 1)
+                chunk = data[start:end + 1]
+                self.send_response(206)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Range", f"bytes {start}-{end}/{len(data)}")
+                self.send_header("Content-Length", str(len(chunk)))
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(chunk)
+                return
+            return self.send(200, data, ctype)
         self.send(404, "not found", "text/plain")
 
     def log_message(self, *a):

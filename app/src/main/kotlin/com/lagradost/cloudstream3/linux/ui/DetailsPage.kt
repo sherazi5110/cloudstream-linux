@@ -39,7 +39,7 @@ class DetailsPage(
 
     init {
         val shade = Region().apply {
-            style = "-fx-background-color: linear-gradient(to bottom, rgba(9,9,12,0.35) 0%, rgba(9,9,12,0.85) 420px, #09090c 640px);"
+            style = "-fx-background-color: linear-gradient(to bottom, -cs-bg-60 0%, -cs-bg-85 420px, -cs-bg 640px);"
             isMouseTransparent = true
         }
         backdropLayer.children += backdrop(poster, posterHeaders, 0.35)
@@ -195,11 +195,20 @@ class DetailsPage(
 
     private fun renderEpisodes() {
         val groups = groups()
-        val chips = ChipGroup { i -> groupIndex = i; renderEpisodes() }
-        chips.setItems(groups.map { "${it.first}  ${it.second.size}" }, groupIndex)
+        // A handful of seasons fit as chips; long-running shows (One Piece…) get a dropdown.
+        val selector: Node = if (groups.size <= 8) {
+            ChipGroup { i -> groupIndex = i; renderEpisodes() }.apply { setItems(groups.map { "${it.first}  ${it.second.size}" }, groupIndex) }
+        } else {
+            javafx.scene.control.ComboBox<String>().apply {
+                items.setAll(groups.map { "${it.first}  (${it.second.size})" })
+                selectionModel.select(groupIndex)
+                prefWidth = 260.0
+                setOnAction { groupIndex = selectionModel.selectedIndex; renderEpisodes() }
+            }
+        }
         val grid = FlowPane(16.0, 18.0)
         groups.getOrNull(groupIndex)?.second?.forEach { ep -> grid.children += episodeCard(ep) }
-        episodesBox.children.setAll(hbox(14.0, label("Episodes", "h3"), chips), grid)
+        episodesBox.children.setAll(FlowPane(14.0, 10.0, label("Episodes", "h3"), selector).apply { alignment = Pos.CENTER_LEFT }, grid)
     }
 
     private fun episodeCard(ep: Playable): Node {

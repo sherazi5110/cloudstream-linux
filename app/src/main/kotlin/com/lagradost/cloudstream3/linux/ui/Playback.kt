@@ -5,16 +5,19 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.Library
-import com.lagradost.cloudstream3.linux.LinkEvent
 import com.lagradost.cloudstream3.linux.Playable
 import com.lagradost.cloudstream3.linux.Player
 import com.lagradost.cloudstream3.linux.Settings
 import com.lagradost.cloudstream3.linux.WatchEntry
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
+import javafx.animation.Interpolator
 import javafx.animation.PauseTransition
+import javafx.animation.TranslateTransition
 import javafx.geometry.Pos
+import javafx.scene.Node
 import javafx.scene.control.ProgressIndicator
+import javafx.scene.image.ImageView
 import javafx.scene.input.Clipboard
 import javafx.scene.input.ClipboardContent
 import javafx.scene.layout.Region
@@ -22,203 +25,260 @@ import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.util.Duration
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URI
 import kotlin.math.abs
 
-/** Starting playback: find sources, hand the chosen one to the player, track progress. */
+/** Starting playback: find sources on the loading screen, then hand over to the player. */
 object Playback {
+    var active: PlayerSession? = null
+
     fun open(api: MainAPI, response: LoadResponse, playable: Playable, chooseManually: Boolean = false) {
-        Nav.window.showOverlay(SourcesSheet(api, response, playable, autoPlay = Settings.autoPlay && !chooseManually))
+        if (active != null) return
+        Nav.window.showOverlay(LoadingScreen(api, response, playable, chooseManually))
     }
 
     fun title(response: LoadResponse, playable: Playable, total: Int) =
         if (total > 1) "${response.name} — ${playable.label}" else response.name
 
-    fun launch(api: MainAPI, response: LoadResponse, playable: Playable, link: ExtractorLink, subtitles: List<SubtitleFile>) {
+    fun start(api: MainAPI, response: LoadResponse, playable: Playable, sources: SourceCollector, link: ExtractorLink) {
+        Nav.window.closeOverlay()
+        if (Settings.player == "builtin" || Settings.player == "mpv") {
+            active = PlayerSession(api, response, playable, sources, link).also { it.start() }
+        } else {
+            sources.cancel()
+            external(api, response, playable, link, sources.subtitles.toList())
+        }
+    }
+
+    /** VLC / ffplay: hand the stream over; progress can't be tracked. */
+    private fun external(api: MainAPI, response: LoadResponse, playable: Playable, link: ExtractorLink, subtitles: List<SubtitleFile>) {
         val all = Engine.playables(response)
         val resume = Library.progress(api.name, playable.data)?.takeIf { it.duration > 0 && it.position / it.duration < 0.92 }?.position
-        val title = title(response, playable, all.size)
         val session = try {
-            Player.play(link, subtitles, title, start = resume)
+            Player.play(link, subtitles, title(response, playable, all.size), start = resume)
         } catch (t: Throwable) {
             Toasts.show(t.message ?: t.toString(), seconds = 8.0)
             return
         }
-        Toasts.show("Opening in ${Settings.player}" + (resume?.let { " · resuming at ${clock(it)}" } ?: ""))
-
-        fun entry(position: Double, duration: Double) = WatchEntry(
-            api.name, response.url, response.name, response.posterUrl, playable.data,
-            if (all.size > 1) playable.label else null, position, duration, System.currentTimeMillis(),
-        )
+        Toasts.show("Opening in ${Settings.player}")
         ui.launch {
             var saved = -100.0
             val (position, duration) = session.track { p, d ->
                 if (abs(p - saved) >= 10) {
                     saved = p
-                    Library.record(entry(p, d))
+                    Library.record(WatchEntry(api.name, response.url, response.name, response.posterUrl, playable.data,
+                        if (all.size > 1) playable.label else null, p, d, System.currentTimeMillis()))
                 }
             }
-            if (duration > 0) withContext(Dispatchers.IO) { Library.record(entry(position, duration)) }
-            val exit = session.process.exitValue()
-            when {
-                duration <= 0 && exit != 0 -> Toasts.show(
-                    "${Settings.player} couldn't play this source (exit $exit)", "Try another" to { open(api, response, playable, chooseManually = true) }, 10.0,
-                )
-                duration > 0 && position / duration > 0.92 -> {
-                    val next = all.getOrNull(all.indexOfFirst { it.data == playable.data } + 1)
-                    if (next != null && next.dub == playable.dub) {
-                        Toasts.show("Up next: ${next.label}", "Play" to { open(api, response, next) }, 12.0)
-                    }
-                }
+            if (duration > 0) withContext(Dispatchers.IO) {
+                Library.record(WatchEntry(api.name, response.url, response.name, response.posterUrl, playable.data,
+                    if (all.size > 1) playable.label else null, position, duration, System.currentTimeMillis()))
             }
         }
     }
 }
 
 /**
- * Lists sources as the extension finds them. With auto-play on, the best source starts
- * once the extension finishes, or a few seconds after the first source arrives, so slow
- * or dead extractors never hold up playback.
+ * Full-window loading screen while the extension looks for sources. With auto-play on,
+ * the best source starts when the extension finishes, a few seconds after the first
+ * source, or immediately once a source reaches the preferred quality.
  */
-class SourcesSheet(
+class LoadingScreen(
     private val api: MainAPI,
     private val response: LoadResponse,
     private val playable: Playable,
-    autoPlay: Boolean,
+    chooseManually: Boolean,
 ) : StackPane(), Disposable {
-    private val links = mutableListOf<ExtractorLink>()
-    private val subtitles = mutableListOf<SubtitleFile>()
-    private val list = VBox(8.0)
-    private val status = hbox(10.0)
-    private val autoBar = hbox(10.0)
-    private var armed = autoPlay
-    private var finished = false
-    private var job: Job? = null
+    private val sources = SourceCollector(api, playable)
+    private var armed = Settings.autoPlay && !chooseManually
+    private var handedOver = false
+    private val status = label("Looking for sources…", "loading-status")
+    private val count = label("0 SOURCES", "loading-count")
+    private val playNow = button("Play now", Icons.PLAY, "btn-primary") { sources.ranked().firstOrNull()?.let { play(it) } }
+    private val bar = Region().apply { styleClass += "loading-bar-fill" }
+    private val sweep = TranslateTransition(Duration.millis(1400.0), bar).apply {
+        fromX = -260.0; toX = 520.0; cycleCount = TranslateTransition.INDEFINITE; interpolator = Interpolator.EASE_BOTH
+    }
     private val grace = PauseTransition(Duration.seconds(4.0)).apply { setOnFinished { autoPlayNow() } }
+    private val actions = hbox(12.0)
 
     init {
-        val scrim = Region().apply { styleClass += "scrim"; onClick { Nav.window.closeOverlay() } }
+        styleClass += "loading-screen"
+        val art = ImageView()
+        val w = Nav.window.width.coerceAtLeast(1280.0)
+        val h = Nav.window.height.coerceAtLeast(720.0)
+        Images.load(art, response.backgroundPosterUrl ?: response.posterUrl, w, h, response.posterHeaders)
+        art.fitWidthProperty().bind(widthProperty())
+        art.fitHeightProperty().bind(heightProperty())
+        art.isPreserveRatio = false
+        val shade = Region().apply { styleClass += "loading-shade" }
+
+        val track = StackPane(bar).apply {
+            styleClass += "loading-bar"
+            setMaxSize(520.0, 4.0); setMinSize(520.0, 4.0)
+            clip = javafx.scene.shape.Rectangle(520.0, 4.0)
+            alignment = Pos.CENTER_LEFT
+        }
+        bar.setMinSize(220.0, 4.0); bar.setMaxSize(220.0, 4.0)
+        sweep.play()
+
+        val total = Engine.playables(response).size
+        val heading = vbox(6.0,
+            label(response.name, "loading-title").apply { isWrapText = true; maxWidth = 900.0; alignment = Pos.CENTER },
+            label(if (total > 1) playable.label else api.name, "loading-subtitle"),
+        ).apply { alignment = Pos.CENTER }
+        val statusRow = hbox(14.0, status, spacer(), count).apply { maxWidth = 520.0 }
+        playNow.isDisable = true
+        actions.children.setAll(
+            playNow,
+            button("Choose source", Icons.MOVIE, "btn-ghost") { showList() },
+            button("Cancel", Icons.CLOSE, "btn-ghost") { Nav.window.closeOverlay() },
+        )
+        actions.alignment = Pos.CENTER
+        val center = VBox(22.0, heading, Region().apply { minHeight = 12.0 }, statusRow, track, actions).apply {
+            alignment = Pos.CENTER
+            maxWidth = 920.0
+        }
+        children.addAll(art, shade, center)
+        sources.onUpdate { onUpdate() }
+        sources.start()
+        if (chooseManually) javafx.application.Platform.runLater { showList() }
+    }
+
+    private fun onUpdate() {
+        val n = sources.links.size
+        count.text = "$n SOURCE${if (n == 1) "" else "S"}"
+        playNow.isDisable = n == 0
+        sources.ranked().firstOrNull()?.let { best ->
+            playNow.text = "Play now · " + Qualities.getStringByInt(best.quality).ifEmpty { "Auto" }
+        }
+        status.text = when {
+            !sources.finished && n == 0 -> "Looking for sources…"
+            !sources.finished -> "Found ${sources.lastSource ?: "a source"} · still searching"
+            n == 0 -> errorText()
+            else -> "Ready"
+        }
+        if (sources.finished) {
+            sweep.stop()
+            bar.translateX = 0.0
+            bar.setMinSize(520.0, 4.0)
+        }
+        if (sources.finished && n == 0) {
+            armed = false
+            actions.children.setAll(
+                button("Retry", Icons.REFRESH, "btn-primary") { sweep.play(); bar.setMinSize(220.0, 4.0); sources.start() },
+                button("Close", Icons.CLOSE, "btn-ghost") { Nav.window.closeOverlay() },
+            )
+            return
+        }
+        if (!armed) return
+        val newest = sources.links.lastOrNull() ?: return
+        val preferred = Settings.preferredQuality
+        when {
+            sources.finished -> autoPlayNow()
+            preferred > 0 && newest.quality >= preferred -> autoPlayNow()
+            n == 1 && grace.status != javafx.animation.Animation.Status.RUNNING -> grace.playFromStart()
+        }
+    }
+
+    private fun errorText(): String {
+        val t = sources.error ?: return "No sources found. The site may be down or blocked — try Settings → Network."
+        return if (t is NotImplementedError || t.toString().contains("WebView")) {
+            "This extension needs an Android WebView (e.g. Cloudflare), which Linux doesn't support yet."
+        } else "No sources: ${t.message ?: t}"
+    }
+
+    private fun autoPlayNow() {
+        if (!armed) return
+        sources.ranked().firstOrNull()?.let { play(it) }
+    }
+
+    private fun play(link: ExtractorLink) {
+        if (handedOver) return
+        handedOver = true
+        armed = false
+        grace.stop()
+        sweep.stop()
+        Playback.start(api, response, playable, sources, link)
+    }
+
+    private fun showList() {
+        armed = false
+        grace.stop()
+        children += SourcesSheet(api, response, playable, sources, onPick = ::play, onClose = { children.removeIf { it is SourcesSheet } })
+    }
+
+    override fun dispose() {
+        grace.stop()
+        sweep.stop()
+        if (!handedOver) sources.cancel()
+    }
+}
+
+/** Manual source picker over the loading screen, sharing its source collector. */
+class SourcesSheet(
+    private val api: MainAPI,
+    response: LoadResponse,
+    playable: Playable,
+    private val sources: SourceCollector,
+    private val onPick: (ExtractorLink) -> Unit,
+    private val onClose: () -> Unit,
+) : StackPane() {
+    private val list = VBox(8.0)
+    private val status = hbox(10.0)
+
+    init {
+        val scrim = Region().apply { styleClass += "scrim"; onClick(onClose) }
         val total = Engine.playables(response).size
         val header = hbox(14.0,
-            vbox(4.0,
-                label("Sources", "h2"),
-                label(Playback.title(response, playable, total), "muted").apply { maxWidth = 600.0 },
-            ),
+            vbox(4.0, label("Sources", "h2"), label(Playback.title(response, playable, total), "muted").apply { maxWidth = 600.0 }),
             spacer(),
-            button(null, Icons.CLOSE, "btn-ghost") { Nav.window.closeOverlay() }.tooltip("Close (Esc)"),
+            button(null, Icons.CLOSE, "btn-ghost") { onClose() }.tooltip("Close"),
         )
         val scroll = pageScroll(list).apply {
-            // Grow with the list up to most of the window, then scroll.
             maxHeightProperty().bind(Nav.window.heightProperty().multiply(0.62))
             prefViewportHeightProperty().bind(list.heightProperty())
         }
-        val sheet = VBox(16.0, header, status, autoBar, scroll).apply {
+        val sheet = VBox(16.0, header, status, scroll).apply {
             styleClass += "sheet"
             pad(24.0, 26.0, 24.0, 26.0)
             maxWidth = 780.0
-            maxHeight = javafx.scene.layout.Region.USE_PREF_SIZE
+            maxHeight = Region.USE_PREF_SIZE
             setOnMouseClicked { it.consume() }
         }
         children.addAll(scrim, sheet)
         StackPane.setAlignment(sheet, Pos.CENTER)
+        sources.onUpdate { render() }
         render()
-        start()
-    }
-
-    private fun start() {
-        finished = false
-        links.clear()
-        subtitles.clear()
-        render()
-        job = ui.launch {
-            Engine.links(api, playable.data).collect { event ->
-                when (event) {
-                    is LinkEvent.Link -> if (links.none { it.url == event.link.url }) {
-                        links += event.link
-                        val preferred = Settings.preferredQuality
-                        when {
-                            !armed -> Unit
-                            // Already as good as the user wants: no reason to wait for more.
-                            preferred > 0 && event.link.quality >= preferred -> { autoPlayNow(); return@collect }
-                            links.size == 1 -> grace.playFromStart()
-                        }
-                    }
-                    is LinkEvent.Subtitle -> if (subtitles.none { it.url == event.subtitle.url }) subtitles += event.subtitle
-                    is LinkEvent.Done -> {
-                        finished = true
-                        if (links.isEmpty() && event.error != null) error(event.error)
-                        else autoPlayNow()
-                    }
-                }
-                render()
-            }
-        }
-    }
-
-    private fun error(t: Throwable) {
-        armed = false
-        val reason = when {
-            t is NotImplementedError || t.toString().contains("WebView") ->
-                "This extension needs an Android WebView (e.g. for Cloudflare), which isn't supported on Linux yet."
-            else -> t.message ?: t.toString()
-        }
-        Toasts.show("${api.name}: $reason", seconds = 8.0)
-    }
-
-    private fun autoPlayNow() {
-        if (!armed || links.isEmpty()) return
-        play(Engine.rank(links).first())
-    }
-
-    private fun play(link: ExtractorLink) {
-        armed = false
-        grace.stop()
-        job?.cancel()
-        Nav.window.closeOverlay()
-        Playback.launch(api, response, playable, link, subtitles.toList())
     }
 
     private fun render() {
-        val ranked = Engine.rank(links)
+        val links = sources.ranked()
         status.children.setAll(listOfNotNull(
-            if (!finished) ProgressIndicator().apply { setPrefSize(18.0, 18.0) } else null,
+            if (!sources.finished) ProgressIndicator().apply { setPrefSize(18.0, 18.0) } else null,
             label(
                 when {
-                    !finished && links.isEmpty() -> "Looking for sources…"
-                    !finished -> "${links.size} source(s) so far, still searching…"
+                    !sources.finished && links.isEmpty() -> "Looking for sources…"
+                    !sources.finished -> "${links.size} source(s) so far, still searching…"
                     links.isEmpty() -> "No sources found"
                     else -> "${links.size} source(s)"
-                } + if (subtitles.isNotEmpty()) "  ·  ${subtitles.size} subtitle(s)" else "",
+                } + if (sources.subtitles.isNotEmpty()) "  ·  ${sources.subtitles.size} subtitle(s)" else "",
                 "muted",
             ),
-            spacer(),
-            if (finished && links.isEmpty()) button("Retry", Icons.REFRESH, "btn-ghost", "btn-small") { start() } else null,
         ))
-        autoBar.isVisible = armed
-        autoBar.isManaged = armed
-        if (armed) autoBar.children.setAll(
-            icon(Icons.PLAY, 14.0).apply { style += "-fx-background-color: #e8194f;" },
-            label(if (links.isEmpty()) "The best source will start automatically" else "Starting the best source…", "small"),
-            spacer(),
-            label("Choose manually", "link-button").onClick { armed = false; grace.stop(); render() },
-        )
         if (links.isEmpty()) {
-            list.children.setAll(
-                if (finished) emptyState(Icons.MOVIE, "No sources", "${api.name} found nothing playable. The site may be down or blocked — try another DNS in Settings, or another extension.")
-                else VBox(8.0).apply {
-                    repeat(3) { children += Region().apply { styleClass += "skeleton"; minHeight = 58.0 } }
-                    opacity = 0.6
-                }
-            )
+            list.children.setAll(VBox(8.0).apply {
+                repeat(3) { children += Region().apply { styleClass += "skeleton"; minHeight = 58.0 } }
+                opacity = 0.6
+            })
             return
         }
-        list.children.setAll(ranked.mapIndexed { i, link -> row(link, best = i == 0) })
+        list.children.setAll(links.mapIndexed { i, link -> row(link, best = i == 0) })
     }
 
-    private fun row(link: ExtractorLink, best: Boolean): javafx.scene.Node {
+    private fun row(link: ExtractorLink, best: Boolean): Node {
         val quality = Qualities.getStringByInt(link.quality).ifEmpty { "AUTO" }
         val host = runCatching { URI(link.url).host }.getOrNull()?.removePrefix("www.") ?: ""
         val pill = label(quality, "quality-pill").apply { if (link.quality in 1..479) styleClass += "low" }
@@ -231,18 +291,12 @@ class SourcesSheet(
             Toasts.show("Stream URL copied")
         }.apply {
             tooltip("Copy stream URL")
-            // Don't let the click reach the row, which would start playback.
             addEventHandler(javafx.scene.input.MouseEvent.MOUSE_CLICKED) { it.consume() }
         }
-        return hbox(14.0, pill, text, spacer(), copy, icon(Icons.PLAY, 20.0).apply { style += "-fx-background-color: #e8194f;" }).apply {
+        return hbox(14.0, pill, text, spacer(), copy, icon(Icons.PLAY, 20.0).apply { styleClass += "accent-icon" }).apply {
             styleClass += "source-row"
             if (best) styleClass += "best"
-            onClick { play(link) }
+            onClick { onPick(link) }
         }
-    }
-
-    override fun dispose() {
-        grace.stop()
-        job?.cancel()
     }
 }

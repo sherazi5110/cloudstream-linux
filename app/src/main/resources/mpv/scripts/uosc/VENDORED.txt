@@ -1,0 +1,3 @@
+uosc 5.13.0 (https://github.com/tomasklaen/uosc), LGPL-2.1. Local changes (marked 'cloudstream-linux'):
+- lib/utils.lua opacity_to_alpha() clamps to 0..255 (float drift crashed the script).
+- main.lua ignores NaN/0/absurd display fps (stalled all animations, menus stayed invisible).

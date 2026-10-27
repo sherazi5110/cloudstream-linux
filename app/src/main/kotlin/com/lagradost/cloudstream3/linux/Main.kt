@@ -27,6 +27,7 @@ private const val USAGE = """cloudstream-linux — run CloudStream extensions on
   play <provider> <url> [--item N] [--link N] [--player mpv|vlc|ffplay]
   key get <key> | key set <key> <value>   read/write the key store extensions use (CloudStreamApp.getKey)
   doctor                                  print diagnostics for bug reports
+  compat <file.cs3|file.jar>              check an extension for APIs missing on Linux (doesn't run it)
 """
 
 fun main(args: Array<String>) {
@@ -151,6 +152,16 @@ suspend fun cli(args: List<String>): Int {
         "key" -> when (pos.getOrNull(1)) {
             "set" -> CloudStreamApp.setKey(pos[2], pos[3]).also { println("${pos[2]} = ${pos[3]}") }
             else -> println(CloudStreamApp.getKey<Any>(pos[2]) ?: "(unset)")
+        }
+        "compat" -> {
+            val issues = CompatChecker.check(File(pos[1]))
+            if (issues.isEmpty()) println("OK: every class, method and field the extension uses exists in this runtime")
+            else {
+                println("${issues.size} unresolved reference(s):")
+                issues.groupBy { it.kind + " " + it.owner + "." + it.member }.forEach { (_, list) ->
+                    println("  ${list.first()}" + if (list.size > 1) "  +${list.size - 1} more" else "")
+                }
+            }
         }
         "doctor" -> {
             println("java      ${System.getProperty("java.version")} (${System.getProperty("java.vendor")})")

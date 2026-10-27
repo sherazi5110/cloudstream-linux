@@ -23,9 +23,24 @@ object Settings {
         prefs.edit().putString(key, value.toString()).apply()
     }
 
+    /** builtin = mpv inside the app window; mpv = mpv in its own window; vlc; ffplay. */
     var player: String
-        get() = string("player", Player.installed().firstOrNull() ?: "mpv")
+        get() = string("player", "builtin").let { if (it == "mpv" || it in Player.supported || it == "builtin") it else "builtin" }
         set(v) = put("player", v)
+
+    /** Lower-power playback for low-end PCs and battery: cheap scaling, no extras. */
+    var batterySaver: Boolean
+        get() = string("battery_saver", "false").toBoolean()
+        set(v) = put("battery_saver", v)
+
+    var autoPlayNext: Boolean
+        get() = string("auto_play_next", "true").toBoolean()
+        set(v) = put("auto_play_next", v)
+
+    /** mpv --slang value, e.g. "en" or "ar,en"; empty = no subtitles by default. */
+    var subtitleLanguage: String
+        get() = string("subtitle_language", "")
+        set(v) = put("subtitle_language", v)
 
     /** Start the best source automatically once sources have been found. */
     var autoPlay: Boolean
@@ -40,6 +55,11 @@ object Settings {
     var dns: DnsProvider
         get() = runCatching { DnsProvider.valueOf(string("dns", "SYSTEM")) }.getOrDefault(DnsProvider.SYSTEM)
         set(v) = put("dns", v.name)
+
+    /** Use system DNS for a while when the DNS-over-HTTPS resolver fails. */
+    var dnsFallback: Boolean
+        get() = string("dns_fallback", "true").toBoolean()
+        set(v) = put("dns_fallback", v)
 
     var mpvArgs: String
         get() = string("mpv_args", "")

@@ -128,8 +128,8 @@ class WideCard(title: String, subtitle: String?, imageUrl: String?, progress: Do
             style = "-fx-background-color: linear-gradient(to bottom, transparent 35%, rgba(0,0,0,0.92) 100%);"
         }
         val text = vbox(2.0,
-            label(title, "bold").apply { maxWidth = w - 28; style = "-fx-font-size: 14px;" },
-            label(subtitle, "muted", "small").apply { maxWidth = w - 28; isVisible = !subtitle.isNullOrBlank() },
+            label(title, "wide-title").apply { maxWidth = w - 28 },
+            label(subtitle, "wide-sub").apply { maxWidth = w - 28; isVisible = !subtitle.isNullOrBlank() },
         ).apply { alignment = Pos.BOTTOM_LEFT; pad(0.0, 14.0, 16.0, 14.0) }
         val play = StackPane(icon(Icons.PLAY, 22.0)).apply {
             style = "-fx-background-color: rgba(0,0,0,0.55); -fx-background-radius: 999; -fx-border-color: rgba(255,255,255,0.6); -fx-border-radius: 999;"
@@ -248,7 +248,8 @@ class ChipGroup(private val onSelect: (Int) -> Unit) : HBox(8.0) {
         chips.clear()
         children.clear()
         items.forEachIndexed { i, text ->
-            val chip = label(text, "chip").onClick { select(i) }
+            // Never shrink a chip into "S…": rows of chips scroll or wrap instead.
+            val chip = label(text, "chip").onClick { select(i) }.apply { minWidth = Region.USE_PREF_SIZE }
             chips += chip
             children += chip
         }
@@ -305,7 +306,7 @@ object Toasts {
             styleClass += "toast"
             maxWidth = javafx.scene.layout.Region.USE_PREF_SIZE
         }
-        action?.let { (text, run) -> box.children += label(text, "link-button").apply { style = "-fx-text-fill: #ff5c86;" }.onClick { run(); host.children.remove(box) } }
+        action?.let { (text, run) -> box.children += label(text, "link-button").onClick { run(); host.children.remove(box) } }
         box.opacity = 0.0
         host.children += box
         FadeTransition(Duration.millis(180.0), box).apply { toValue = 1.0 }.play()

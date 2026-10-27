@@ -4,16 +4,21 @@ Run **CloudStream extensions on Ubuntu/Linux**, from the same repositories the A
 
 - **Same extensions:** add repositories by URL, `cloudstreamrepo://` link or shortcode. Android `.cs3` files are translated from Dalvik to JVM bytecode automatically; cross-platform `.jar` builds are used directly.
 - **Fast, streaming UI:** home sections, search results and video sources appear as each one arrives. A slow or dead site never blocks the rest, and the window opens immediately while extensions load in parallel.
-- **Plays in mpv:** hardware decoding, with stream headers, referer, subtitles and audio tracks passed through. Playback position is tracked over mpv's IPC socket for **Resume**, **Continue Watching** and **Up next**.
-- **Library:** bookmarks (My List), history and per-episode progress.
-- **Network:** DNS-over-HTTPS (Cloudflare, Google, AdGuard, Quad9…) to get past ISP blocking, plus an HTTP cache.
+- **Built-in player:** mpv plays inside the app window (no separate window), with an on-screen UI. You can switch sources mid-playback (it keeps your position), pick subtitles and audio tracks, load a subtitle file, change speed, and skip to the next episode. If a source fails, it falls back to the next one automatically. Hardware decoding is on by default, and a battery-saver mode suits low-end PCs.
+- **Loading screen:** shows artwork, a live source count, *Play now* (at your preferred quality), *Choose source* and *Cancel*.
+- **Your look:** Dark, AMOLED black, Midnight blue and Light themes, seven accent colours or any hex colour, and your own wallpaper behind the app with dim and blur.
+- **Library:** bookmarks (My List), history, per-episode progress, *Resume* and *Continue Watching*.
+- **Network:** DNS-over-HTTPS (Cloudflare, Google, AdGuard, Quad9…) with automatic fallback to system DNS, persistent cookies, IPv4-first, and an HTTP cache.
+- **Developer tools:** per-extension test (home → search → details → sources), a static Linux compatibility check, a log viewer, and storage/cache management.
 - A full CLI is included for scripting.
 
 | | |
 |---|---|
 | ![Home](docs/screenshots/home.png) | ![Details](docs/screenshots/details.png) |
-| ![Sources](docs/screenshots/sources.png) | ![Continue watching](docs/screenshots/home-continue.png) |
-| ![Search](docs/screenshots/search-results.png) | ![Extensions](docs/screenshots/extensions.png) |
+| ![Loading](docs/screenshots/loading.png) | ![Player](docs/screenshots/player.png) |
+| ![Sources in the player](docs/screenshots/player-sources.png) | ![Player settings](docs/screenshots/player-settings.png) |
+| ![Extensions](docs/screenshots/extensions.png) | ![Settings](docs/screenshots/settings.png) |
+| ![Light theme](docs/screenshots/theme-light.png) | ![Developer tools](docs/screenshots/settings-developer.png) |
 
 *(Screenshots use the offline demo extension in `tests/DemoProvider`.)*
 
@@ -53,15 +58,17 @@ Or build a self-contained `.deb` with a bundled Java runtime:
 ```bash
 ./scripts/build-deb.sh                 # build/cloudstream-linux_<version>_amd64.deb
 ./scripts/uninstall-user-install.sh    # only if you used install.sh before (keeps your data)
-sudo apt install ./build/cloudstream-linux_2.0.0_amd64.deb
+sudo apt install ./build/cloudstream-linux_3.0.0_amd64.deb
 # remove later with: sudo apt remove cloudstream-linux
 ```
 
 ## Use
 
-Run `cloudstream-linux` (or open **CloudStream** from the app menu). Go to **Extensions**, paste a repository link, install extensions, then use **Home** and **Search**. Shortcuts: `/` or `Ctrl+F` to search, `Esc` to go back.
+Run `cloudstream-linux` (or open **CloudStream** from the app menu). Go to **Extensions**, paste a repository link, install extensions, then use **Home** and **Search**. Shortcuts: `/` or `Ctrl+F` to search, `Esc` to go back, `F11` for full screen.
 
-If a site doesn't load, try **Settings → DNS over HTTPS**. If a title won't play, open **Sources** to pick another source manually.
+In the player: `Space` pause, `←/→` seek, `↑/↓` volume, `s` sources, `c` playback settings, `L` load subtitle file, `n` next episode, `f` full screen, `Esc` back. Right-click opens the full menu.
+
+If a site doesn't load, try **Settings → Network & DNS**. If an extension misbehaves, **Settings → Developer & logs → Test** shows at which step it fails. Include that, together with the log, in bug reports.
 
 CLI:
 
@@ -113,7 +120,7 @@ In a real recloudstream/gradle project, set `cloudstream { isCrossPlatform = tru
 python3 -I tests/mock-archive/server.py 8766   # local mock site for the demo/example extensions
 
 # Scripted screenshot tour (any X display or xvfb-run):
-PATH=$PWD/tests/fake-mpv:$PATH CS_SCREENSHOT=/tmp/shot CS_SCREENSHOT_SEARCH=pixel cloudstream-linux
+CS_SCREENSHOT=/tmp/shot CS_SCREENSHOT_SEARCH=pixel cloudstream-linux   # player shots need mpv, xdotool, ImageMagick
 ```
 
 CI (`.github/workflows/build.yml`) runs the tests on every push and publishes the `.deb` and tarball for every `v*` tag.
@@ -123,3 +130,7 @@ The upstream versions are pinned in `scripts/fetch-upstream.sh` (`CS_COMMIT`, `N
 ## License
 
 GPL-3.0, the same as CloudStream, whose library sources this project compiles.
+
+The player UI is [uosc](https://github.com/tomasklaen/uosc) 5.13.0 (LGPL-2.1), bundled in `app/src/main/resources/mpv/scripts/uosc` with two small robustness fixes listed in `VENDORED.txt`.
+
+Made by Tennant Creek.

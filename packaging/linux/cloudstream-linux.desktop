@@ -8,3 +8,5 @@ Icon=@ICON@
 Terminal=false
 Categories=AudioVideo;Video;Player;
 MimeType=x-scheme-handler/cloudstreamrepo;
+# JavaFX names the window after the Application class; this maps it to our icon.
+StartupWMClass=com.lagradost.cloudstream3.linux.ui.DesktopApp

@@ -28,7 +28,7 @@ class SearchPage : StackPane(), Refreshable {
     private var lastQuery = ""
 
     init {
-        val searchIcon = icon(Icons.SEARCH, 20.0).apply { style += "-fx-background-color: #6b6b78;" }
+        val searchIcon = icon(Icons.SEARCH, 20.0).apply { styleClass += "faint-icon" }
         val fieldBox = StackPane(field, searchIcon).apply { maxWidth = 760.0 }
         StackPane.setAlignment(searchIcon, Pos.CENTER_LEFT)
         StackPane.setMargin(searchIcon, javafx.geometry.Insets(0.0, 0.0, 0.0, 16.0))

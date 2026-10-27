@@ -7,17 +7,15 @@ import com.lagradost.cloudstream3.linux.PluginWrapper
 import com.lagradost.cloudstream3.linux.RepositoryData
 import com.lagradost.cloudstream3.linux.RepositoryManager
 import com.lagradost.cloudstream3.linux.statusName
-import javafx.collections.FXCollections
 import javafx.geometry.Pos
 import javafx.scene.Node
 import javafx.scene.control.Alert
 import javafx.scene.control.ButtonType
 import javafx.scene.control.ComboBox
-import javafx.scene.control.ListCell
-import javafx.scene.control.ListView
 import javafx.scene.control.ProgressIndicator
 import javafx.scene.control.TextField
 import javafx.scene.image.ImageView
+import javafx.scene.layout.FlowPane
 import javafx.scene.layout.Priority
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
@@ -34,14 +32,36 @@ data class ExtRow(val wrapper: PluginWrapper?, val installed: PluginData?) {
     val hasUpdate get() = installed != null && wrapper != null && wrapper.plugin.version > installed.version
 }
 
+/** Type filter chips, matched against a plugin's tvTypes. */
+private val TYPE_FILTERS: List<Pair<String, Set<String>?>> = listOf(
+    "All types" to null,
+    "Movies" to setOf("Movie", "AnimeMovie", "Documentary"),
+    "TV" to setOf("TvSeries", "AsianDrama", "Cartoon", "Documentary"),
+    "Anime" to setOf("Anime", "AnimeMovie", "OVA"),
+    "Live" to setOf("Live"),
+    "Other" to setOf("Torrent", "Music", "AudioBook", "Audio", "Podcast", "CustomMedia", "Others", "NSFW"),
+)
+
+private fun typeName(type: String) = when (type) {
+    "TvSeries" -> "TV"
+    "AsianDrama" -> "Asian drama"
+    "AnimeMovie" -> "Anime movie"
+    "AudioBook" -> "Audiobook"
+    "CustomMedia" -> "Custom"
+    else -> type
+}
+
 class ExtensionsPage : StackPane(), Refreshable {
     private val repoField = TextField().apply { promptText = "Repository URL or shortcode (the same ones the Android app uses)" }
     private val repoList = VBox()
     private val filterField = TextField().apply { promptText = "Filter extensions" }
     private val language = ComboBox<String>().apply { items.setAll("All languages"); selectionModel.select(0) }
+    private val repoFilter = ComboBox<String>().apply { items.setAll("All repositories"); selectionModel.select(0) }
     private val view = ChipGroup { applyFilter() }
-    private val items = FXCollections.observableArrayList<ExtRow>()
-    private val listView = ListView(items)
+    private val types = ChipGroup { applyFilter() }
+    private var rows: List<ExtRow> = emptyList()
+    private var shown = PAGE
+    private val grid = FlowPane(14.0, 14.0)
     private val stats = label("", "muted")
     private val busy = mutableSetOf<String>()
     private var available: List<PluginWrapper> = emptyList()
@@ -60,16 +80,30 @@ class ExtensionsPage : StackPane(), Refreshable {
         val repoCard = vbox(10.0, label("REPOSITORIES", "section-label"), addRow, repoList).apply { styleClass += "card" }
 
         view.setItems(listOf("All", "Installed", "Updates"))
+        types.setItems(TYPE_FILTERS.map { it.first })
         filterField.textProperty().addListener { _, _, _ -> applyFilter() }
         language.setOnAction { applyFilter() }
+        repoFilter.setOnAction { applyFilter() }
         growWide(filterField)
-        val filterRow = hbox(10.0, filterField, language, view)
-        listView.setCellFactory { ExtCell() }
-        listView.placeholder = label("No extensions to show", "muted")
-        VBox.setVgrow(listView, Priority.ALWAYS)
+        val filterRow = hbox(10.0, filterField, repoFilter, language, view)
+        // Cards share the row evenly: as many ~300px columns as fit.
+        grid.widthProperty().addListener { _, _, _ -> sizeCards() }
 
-        children += VBox(18.0, header, repoCard, filterRow, listView).pad(22.0, 36.0, 24.0, 36.0)
+        val page = VBox(18.0, header, repoCard, filterRow, types, grid).pad(22.0, 36.0, 32.0, 36.0)
+        children += pageScroll(page)
         ui.launch { PluginManager.version.collect { applyFilter() } }
+    }
+
+    private fun cardWidth(): Double {
+        val gap = grid.hgap
+        val width = grid.width.takeIf { it > 0 } ?: 900.0
+        val columns = ((width + gap) / (300.0 + gap)).toInt().coerceAtLeast(1)
+        return Math.floor((width - gap * (columns - 1)) / columns) - 0.5
+    }
+
+    private fun sizeCards() {
+        val w = cardWidth()
+        grid.children.forEach { (it as? VBox)?.prefWidth = w }
     }
 
     private fun growWide(node: Node) = javafx.scene.layout.HBox.setHgrow(node, Priority.ALWAYS)
@@ -89,6 +123,9 @@ class ExtensionsPage : StackPane(), Refreshable {
             available = perRepo.values.filterNotNull().flatten()
             loadingRepos = false
             renderRepos(repos, perRepo)
+            val selectedRepo = repoFilter.value
+            repoFilter.items.setAll(listOf("All repositories") + repos.map { it.name }.distinct())
+            repoFilter.value = selectedRepo?.takeIf { it in repoFilter.items } ?: "All repositories"
             val langs = available.mapNotNull { it.plugin.language }.distinct().sortedBy { languageName(it) }
             val selected = language.value
             language.items.setAll(listOf("All languages") + langs.map { "${languageName(it)} ($it)" })
@@ -126,18 +163,36 @@ class ExtensionsPage : StackPane(), Refreshable {
             installed.filter { local -> available.none { it.plugin.internalName == local.internalName } }.map { ExtRow(null, it) }
         val query = filterField.text.trim().lowercase()
         val lang = language.value?.substringAfterLast('(')?.removeSuffix(")")?.takeIf { language.selectionModel.selectedIndex > 0 }
-        items.setAll(rows.filter { row ->
+        val repo = repoFilter.value?.takeIf { repoFilter.selectionModel.selectedIndex > 0 }
+        val typeSet = TYPE_FILTERS.getOrNull(types.selected)?.second
+        this.rows = rows.filter { row ->
             (query.isEmpty() || row.name.lowercase().contains(query) || row.wrapper?.plugin?.description.orEmpty().lowercase().contains(query)) &&
                 (lang == null || row.wrapper?.plugin?.language == lang) &&
+                (repo == null || row.wrapper?.repository?.name == repo) &&
+                (typeSet == null || row.wrapper?.plugin?.tvTypes.orEmpty().any { it in typeSet }) &&
                 when (view.selected) {
                     1 -> row.installed != null
                     2 -> row.hasUpdate
                     else -> true
                 }
-        }.sortedWith(compareBy({ it.installed == null }, { it.name.lowercase() })))
+        }.sortedWith(compareBy({ it.installed == null }, { it.name.lowercase() }))
+        shown = PAGE
+        renderGrid()
         val loaded = Engine.providers().size
         if (!loadingRepos) stats.text = "${available.size} available · ${installed.size} installed · $loaded providers loaded" +
             (PluginManager.failures.size.takeIf { it > 0 }?.let { " · $it failed" } ?: "")
+    }
+
+    /** Renders cards a page at a time: big repositories list hundreds of extensions. */
+    private fun renderGrid() {
+        val w = cardWidth()
+        val nodes = rows.take(shown).map { card(it).apply { prefWidth = w } }.toMutableList<Node>()
+        if (rows.isEmpty()) nodes += label(if (available.isEmpty() && loadingRepos) "Loading extensions…" else "No extensions match these filters", "muted")
+        if (rows.size > shown) nodes += button("Show ${minOf(PAGE, rows.size - shown)} more (${rows.size - shown} left)", null, "btn-ghost") {
+            shown += PAGE
+            renderGrid()
+        }
+        grid.children.setAll(nodes)
     }
 
     private fun languageName(code: String) =
@@ -179,7 +234,7 @@ class ExtensionsPage : StackPane(), Refreshable {
     private fun install(wrapper: PluginWrapper) {
         val name = wrapper.plugin.internalName
         if (!busy.add(name)) return
-        listView.refresh()
+        renderGrid()
         ui.launch {
             val result = withContext(Engine.dispatcher) { PluginManager.install(wrapper) }
             busy.remove(name)
@@ -226,52 +281,54 @@ class ExtensionsPage : StackPane(), Refreshable {
         }
     }
 
-    private inner class ExtCell : ListCell<ExtRow>() {
-        override fun updateItem(item: ExtRow?, empty: Boolean) {
-            super.updateItem(item, empty)
-            text = null
-            graphic = if (empty || item == null) null else render(item)
+    private fun card(row: ExtRow): VBox {
+        val p = row.wrapper?.plugin
+        val iconView = ImageView()
+        Images.load(iconView, p?.iconUrl?.replace("%size%", "96"), 46.0, 46.0)
+        val initials = label(row.name.filter { it.isLetterOrDigit() }.take(2).uppercase(), "bold", "muted")
+        val iconBox = StackPane(initials, iconView).apply {
+            styleClass += "poster-frame"
+            setMinSize(46.0, 46.0); setMaxSize(46.0, 46.0)
+            roundedClip(this, 12.0)
         }
+        val version = (p?.version ?: row.installed?.version)?.let { "v$it" }
+        val meta = listOfNotNull(p?.language?.let { languageName(it) }, version, row.wrapper?.repository?.name)
+        val title = vbox(2.0,
+            label(row.name, "bold").apply { isWrapText = false },
+            label(meta.joinToString(" · "), "faint", "small"),
+        ).apply { javafx.scene.layout.HBox.setHgrow(this, Priority.ALWAYS); minWidth = 0.0 }
+        val head = hbox(12.0, iconBox, title)
 
-        private fun render(row: ExtRow): Node {
-            val p = row.wrapper?.plugin
-            val iconView = ImageView()
-            Images.load(iconView, p?.iconUrl?.replace("%size%", "64"), 40.0, 40.0)
-            val initials = label(row.name.filter { it.isLetterOrDigit() }.take(2).uppercase(), "bold", "muted")
-            val iconBox = StackPane(initials, iconView).apply {
-                styleClass += "poster-frame"
-                setMinSize(40.0, 40.0); setMaxSize(40.0, 40.0)
-                roundedClip(this, 10.0)
-            }
-            val tags = hbox(6.0, label(row.name, "bold"))
-            (p?.version ?: row.installed?.version)?.let { tags.children += label("v$it", "tag") }
-            p?.language?.let { tags.children += label(languageName(it), "tag") }
-            p?.tvTypes?.take(3)?.forEach { tags.children += label(it, "tag") }
-            if (p != null && p.status != 1) tags.children += label(statusName(p.status), "tag", "accent")
-            if (row.wrapper == null) tags.children += label("local", "tag")
-            val failure = PluginManager.failures[row.internalName]
-            val lines = vbox(4.0, tags).apply { javafx.scene.layout.HBox.setHgrow(this, Priority.ALWAYS) }
-            p?.description?.takeIf { it.isNotBlank() }?.let {
-                lines.children += label(it, "muted", "small").apply { maxWidth = 760.0 }
-            }
-            row.wrapper?.repository?.name?.let { lines.children += label(it, "faint", "small") }
-            failure?.let { lines.children += label("Failed to load: ${it.message ?: it}", "error-text", "small").apply { isWrapText = true; maxWidth = 760.0 } }
+        val card = VBox(10.0, head).apply { styleClass += "ext-card" }
+        p?.description?.takeIf { it.isNotBlank() }?.let {
+            card.children += label(it, "muted", "small").apply { isWrapText = true; maxHeight = 34.0 }
+        }
+        val tags = FlowPane(6.0, 6.0)
+        p?.tvTypes?.take(4)?.forEach { tags.children += label(typeName(it), "tag") }
+        if (p != null && p.status != 1) tags.children += label(statusName(p.status), "tag", "accent")
+        if (tags.children.isNotEmpty()) card.children += tags
 
-            val actions = hbox(8.0).apply { alignment = Pos.CENTER_RIGHT }
-            when {
-                row.internalName in busy -> actions.children += hbox(8.0, ProgressIndicator().apply { setPrefSize(18.0, 18.0) }, label("Installing…", "muted"))
-                row.installed == null -> actions.children += button("Install", Icons.DOWNLOAD, "btn-accent", "btn-small") { install(row.wrapper!!) }
-                else -> {
-                    if (row.hasUpdate) actions.children += button("Update", Icons.REFRESH, "btn-accent", "btn-small") { install(row.wrapper!!) }
-                    else actions.children += label(if (failure == null) "Installed" else "Error", if (failure == null) "good-text" else "error-text", "small")
-                    actions.children += button(null, Icons.DELETE, "btn-danger", "btn-small") { uninstall(row) }.tooltip("Uninstall")
-                }
-            }
-            return hbox(14.0, iconBox, lines, actions).apply {
-                styleClass += "source-row"
-                style = "-fx-cursor: default;"
-                prefWidthProperty().bind(listView.widthProperty().subtract(24))
+        val failure = PluginManager.failures[row.internalName]
+        failure?.let { card.children += label("Failed to load: ${it.message ?: it}", "error-text", "small").apply { isWrapText = true } }
+
+        val actions = hbox(8.0).apply { alignment = Pos.CENTER_RIGHT }
+        when {
+            row.internalName in busy -> actions.children += hbox(8.0, ProgressIndicator().apply { setPrefSize(18.0, 18.0) }, label("Installing…", "muted"))
+            row.installed == null -> actions.children += button("Install", Icons.DOWNLOAD, "btn-accent", "btn-small") { install(row.wrapper!!) }
+                .apply { isDisable = p?.status == 0 }
+            else -> {
+                actions.children += label(if (failure == null) "Installed" else "Error", if (failure == null) "good-text" else "error-text", "small")
+                actions.children += spacer()
+                if (row.hasUpdate) actions.children += button("Update", Icons.REFRESH, "btn-accent", "btn-small") { install(row.wrapper!!) }
+                actions.children += button(null, Icons.DELETE, "btn-danger", "btn-small") { uninstall(row) }.tooltip("Uninstall")
             }
         }
+        card.children += spacer()
+        card.children += actions
+        return card
+    }
+
+    private companion object {
+        const val PAGE = 60
     }
 }

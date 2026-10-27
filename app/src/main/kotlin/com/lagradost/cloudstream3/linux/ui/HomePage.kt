@@ -155,7 +155,7 @@ class HomePage : StackPane(), Refreshable {
             ).pad(10.0, 0.0, 0.0, 0.0),
         ).apply { alignment = Pos.CENTER_LEFT }
         val shade = Region().apply {
-            style = "-fx-background-color: linear-gradient(to right, rgba(9,9,12,0.96) 0%, rgba(9,9,12,0.75) 45%, rgba(9,9,12,0.25) 100%);"
+            style = "-fx-background-color: linear-gradient(to right, -cs-bg-96 0%, -cs-bg-85 45%, -cs-bg-0 100%);"
         }
         val layout = hbox(40.0, text, spacer(), posterFrame).pad(36.0, 56.0, 36.0, 48.0)
         return StackPane(backdrop(item.posterUrl, item.posterHeaders, 0.3), shade, layout).apply {
@@ -163,7 +163,7 @@ class HomePage : StackPane(), Refreshable {
             minHeight = 390.0
             maxHeight = 390.0
             roundedClip(this, 18.0)
-            style = "-fx-background-color: #14141a;"
+            style = "-fx-background-color: -cs-surface;"
         }
     }
 }
