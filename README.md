@@ -48,11 +48,13 @@ git clone <this repo> cloudstream-linux && cd cloudstream-linux
 ./scripts/install.sh               # ~/.local install, app-menu entry, cloudstreamrepo:// handler
 ```
 
-Or build a self-contained `.deb` with a bundled Java runtime (needs `fakeroot`):
+Or build a self-contained `.deb` with a bundled Java runtime:
 
 ```bash
-./gradlew :app:packageDeb          # app/build/jpackage/cloudstream-linux_1.0.0_amd64.deb
-sudo apt install ./app/build/jpackage/cloudstream-linux_1.0.0_amd64.deb
+./scripts/build-deb.sh                 # build/cloudstream-linux_<version>_amd64.deb
+./scripts/uninstall-user-install.sh    # only if you used install.sh before (keeps your data)
+sudo apt install ./build/cloudstream-linux_2.0.0_amd64.deb
+# remove later with: sudo apt remove cloudstream-linux
 ```
 
 ## Use

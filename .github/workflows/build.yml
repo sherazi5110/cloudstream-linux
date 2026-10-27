@@ -1,0 +1,52 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Fetch pinned upstream sources
+        run: ./scripts/fetch-upstream.sh
+
+      - name: Test
+        # Loads real .cs3/.jar extensions, checks the Android shims, streaming sources
+        # against a mock site with a dead host, and mpv IPC progress tracking.
+        run: ./gradlew :app:test
+
+      - name: Build .deb and tarball
+        run: |
+          ./scripts/build-deb.sh
+          ./gradlew :app:distTar
+          mv app/build/distributions/cloudstream-linux.tar "app/build/distributions/cloudstream-linux-${GITHUB_REF_NAME//\//-}.tar"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cloudstream-linux
+          path: |
+            build/*.deb
+            app/build/distributions/*.tar
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/*.deb
+            app/build/distributions/*.tar
+          generate_release_notes: true
