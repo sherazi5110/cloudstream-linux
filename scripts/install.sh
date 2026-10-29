@@ -23,4 +23,4 @@ fi
 command -v update-desktop-database >/dev/null && update-desktop-database "$PREFIX/share/applications" || true
 
 echo "Installed. Run 'cloudstream-linux' or open CloudStream from your app menu."
-command -v mpv >/dev/null || echo "Tip: install a player with: sudo apt install mpv"
+ldconfig -p 2>/dev/null | grep -q libvlc.so.5 || echo "To play videos, install VLC's libraries: sudo apt install libvlc5 vlc-plugin-base"

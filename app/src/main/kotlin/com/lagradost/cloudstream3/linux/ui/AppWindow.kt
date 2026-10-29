@@ -240,7 +240,7 @@ class AppWindow(val stage: Stage) : StackPane() {
         return true
     }
 
-    /** While mpv draws over the window, hide everything else so JavaFX does no work. */
+    /** While the player fills the window, hide everything else so JavaFX does no extra work. */
     fun enterPlayer(surface: Node) {
         layout.isVisible = false
         overlay.isVisible = false

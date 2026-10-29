@@ -82,9 +82,6 @@ object Theme {
             "-fx-base: ${p.surface2}; -fx-control-inner-background: ${p.surface};"
     }
 
-    /** Hex without '#', for mpv/uosc colour options. */
-    fun hex(color: String) = color.removePrefix("#").lowercase()
-
     fun rgba(hex: String, alpha: Double): String {
         if (hex.startsWith("rgba")) return hex
         val c = hex.removePrefix("#")

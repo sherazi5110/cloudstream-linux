@@ -30,23 +30,6 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
-// The mpv player profile (uosc UI, fonts, configs) ships as resources; this index lets the
-// app extract the directory tree from the jar at runtime.
-val mpvIndex by tasks.registering {
-    val source = layout.projectDirectory.dir("src/main/resources/mpv")
-    val out = layout.buildDirectory.file("generated/mpv-index/mpv/index.txt")
-    inputs.dir(source)
-    outputs.file(out)
-    doLast {
-        val root = source.asFile
-        out.get().asFile.apply { parentFile.mkdirs() }.writeText(
-            root.walkTopDown().filter { it.isFile }.map { it.relativeTo(root).invariantSeparatorsPath }.sorted().joinToString("\n")
-        )
-    }
-}
-sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/mpv-index")) }
-tasks.processResources { dependsOn(mpvIndex) }
-
 application {
     applicationName = "cloudstream-linux"
     mainClass.set("com.lagradost.cloudstream3.linux.MainKt")

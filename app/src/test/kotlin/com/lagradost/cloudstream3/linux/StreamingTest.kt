@@ -70,16 +70,4 @@ class StreamingTest {
         val batches = Engine.search("pixel", listOf(api)).toList()
         assertEquals(listOf("Pixel City", "His Girl Pixel"), batches.single().results.map { it.name })
     }
-
-    @Test
-    fun `mpv progress is tracked over its IPC socket`() = runBlocking {
-        val socket = kotlin.io.path.createTempFile("cs-test-", ".sock").also { java.nio.file.Files.delete(it) }
-        val process = ProcessBuilder(tests.resolve("fake-mpv/mpv").path, "--input-ipc-server=$socket", "--start=60")
-            .apply { environment()["FAKE_MPV_SECONDS"] = "3" }.start()
-        val reports = mutableListOf<Pair<Double, Double>>()
-        val (position, duration) = PlaybackSession(process, socket).track { p, d -> reports += p to d }
-        assertEquals(600.0, duration)
-        assertTrue(position > 100, "position $position")
-        assertTrue(reports.isNotEmpty())
-    }
 }

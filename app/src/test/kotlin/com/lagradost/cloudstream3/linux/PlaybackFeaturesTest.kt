@@ -114,6 +114,8 @@ class PlaybackFeaturesTest {
         assertEquals("Spanish", results[2].languageName)
         assertTrue(OnlineSubtitles.matches("eng", "en"))
         assertTrue(OnlineSubtitles.matches("spa", "Spanish"))
+        assertTrue(OnlineSubtitles.matches("eng", "ar, en"))
+        assertTrue(!OnlineSubtitles.matches("fre", "ar,en"))
         val file = OnlineSubtitles.download(results[2])
         assertTrue(file.readText().contains("Subtítulo en línea"))
     }

@@ -9,7 +9,7 @@ import com.lagradost.cloudstream3.utils.newExtractorLink
 
 /**
  * Upstream resolves YouTube with NewPipeExtractor (jitpack-only). On Linux we hand
- * the page URL to the player instead: mpv resolves YouTube itself via yt-dlp.
+ * the page URL to the player instead: VLC resolves YouTube pages with its own script.
  */
 actual open class YoutubeExtractor actual constructor() : ExtractorApi() {
     actual override val mainUrl = "https://www.youtube.com"

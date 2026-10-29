@@ -77,8 +77,7 @@ It also appears in your app menu as **CloudStream**.
   (add `--delete-data` to also delete extensions, history and settings).
 
 Inside the Flatpak, the app can only open files from your **Downloads** folder (for
-subtitle files and side-loaded extensions), and the external mpv/VLC player options
-aren't available; use the built-in player.
+subtitle files and side-loaded extensions).
 
 ---
 

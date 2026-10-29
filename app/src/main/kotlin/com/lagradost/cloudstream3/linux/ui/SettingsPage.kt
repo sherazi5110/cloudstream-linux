@@ -6,7 +6,6 @@ import com.lagradost.cloudstream3.linux.DnsProvider
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.Logs
 import com.lagradost.cloudstream3.linux.Network
-import com.lagradost.cloudstream3.linux.Player
 import com.lagradost.cloudstream3.linux.PluginManager
 import com.lagradost.cloudstream3.linux.ProviderTest
 import com.lagradost.cloudstream3.linux.RepositoryManager
@@ -234,28 +233,15 @@ class SettingsPage : StackPane(), Refreshable {
     }
 
     private fun playback(): List<Node> {
-        val installed = Player.installed()
-        val players = listOf("builtin", "mpv", "vlc", "ffplay")
         val vlcEngine = Vlc.factory != null
-        fun playerName(p: String) = when (p) {
-            "builtin" -> "Built-in (in the app)"
-            "mpv" -> "mpv in its own window"
-            "vlc" -> "VLC app"
-            else -> p
-        } + when {
-            p == "builtin" && !vlcEngine -> " — needs VLC"
-            p != "builtin" && p !in installed -> " — not installed"
-            else -> ""
-        }
         val qualities = listOf(0, 2160, 1440, 1080, 720, 480)
         return listOf(
             section("Player",
-                row("Video player", if (!vlcEngine) "The built-in player uses VLC's engine, which isn't installed — run: sudo apt install vlc" else
-                    "The built-in player plays inside this window using VLC ${Vlc.version.orEmpty()}: every format VLC plays, hardware decoding, source switching, online subtitles, audio languages, speed and zoom.",
-                    combo(players, Settings.player, ::playerName) { Settings.player = it }),
+                row("Player engine", if (!vlcEngine) "VLC's libraries aren't installed, so videos can't play. Run: sudo apt install libvlc5 vlc-plugin-base" else
+                    "Videos play inside this window using VLC ${Vlc.version.orEmpty()}: every format VLC plays, hardware decoding, source switching, online subtitles, audio languages, speed and zoom.",
+                    label(if (vlcEngine) "Ready" else "Not installed", if (vlcEngine) "good-text" else "error-text")),
                 row("Battery saver", "For low-end PCs and laptops on battery: skips the H.264 deblocking filter (much less CPU), buffers longer and does no extra processing. Hardware decoding stays on. Restart the app to apply.",
                     Switch(Settings.batterySaver) { Settings.batterySaver = it }),
-                row("Extra mpv options", "Only for the mpv player. Passed to mpv as-is, e.g. --volume=80", textSetting(Settings.mpvArgs, "--volume=80") { Settings.mpvArgs = it }),
             ),
             section("Sources",
                 row("Auto-play best source", "Start the best source automatically instead of picking from the list.",
@@ -437,8 +423,6 @@ class SettingsPage : StackPane(), Refreshable {
             section("Space used", *rows.toTypedArray()),
             section("Folders",
                 row("App data", AppDirs.data.absolutePath, button("Open", Icons.FOLDER, "btn-ghost", "btn-small") { openFolder(AppDirs.data) }),
-                row("mpv configuration", "mpv profile and player UI used by the mpv player",
-                    button("Open", Icons.FOLDER, "btn-ghost", "btn-small") { openFolder(File(AppDirs.data, "mpv")) }),
             ),
         )
     }
@@ -448,7 +432,7 @@ class SettingsPage : StackPane(), Refreshable {
             row("Version ${AppInfo.VERSION}", "Runs CloudStream extensions from the same repositories as the Android app. Free software under GPL-3.0.",
                 label("v${AppInfo.VERSION}", "tag", "accent")),
             row("Made by", AppInfo.CREDIT, label("", "muted")),
-            row("Built on", "The upstream CloudStream library, libVLC through vlcj (built-in player), mpv and uosc (mpv player UI, LGPL-2.1), JavaFX. Online subtitles: OpenSubtitles via the Stremio addon protocol.", label("", "muted")),
+            row("Built on", "The upstream CloudStream library, libVLC through vlcj (player), JavaFX. Online subtitles: OpenSubtitles via the Stremio addon protocol.", label("", "muted")),
         ),
         section("Keyboard",
             row("Anywhere", "/ or Ctrl+F search · Esc back · Alt+← back · F11 fullscreen", label("", "muted")),
