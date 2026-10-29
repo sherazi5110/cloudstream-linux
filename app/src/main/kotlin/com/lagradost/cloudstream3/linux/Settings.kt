@@ -70,6 +70,11 @@ object Settings {
         get() = string("player_volume", "100").toIntOrNull()?.coerceIn(0, 200) ?: 100
         set(v) = put("player_volume", v)
 
+    /** Look for a newer release on GitHub once a day at startup. */
+    var checkUpdates: Boolean
+        get() = string("check_updates", "true") == "true"
+        set(v) = put("check_updates", v)
+
     /** Home: rotate the featured banner through the first catalog's top titles. */
     var heroSlider: Boolean
         get() = string("hero_slider", "true") == "true"

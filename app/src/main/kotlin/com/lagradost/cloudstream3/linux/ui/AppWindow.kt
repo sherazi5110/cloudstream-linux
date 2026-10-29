@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.PluginManager
 import com.lagradost.cloudstream3.linux.Settings
+import com.lagradost.cloudstream3.linux.Updates
 import javafx.animation.FadeTransition
 import javafx.application.Application
 import javafx.application.Platform
@@ -290,6 +291,13 @@ class AppWindow(val stage: Stage) : StackPane() {
             if (Settings.autoUpdateExtensions) {
                 val updated = withContext(Engine.dispatcher) { runCatching { PluginManager.updateAll() }.getOrDefault(emptyList()) }
                 if (updated.isNotEmpty()) Toasts.show("Updated ${updated.joinToString()}")
+            }
+            if (Settings.checkUpdates && System.currentTimeMillis() - Updates.lastCheck > 20 * 3600_000L &&
+                System.getenv("CS_SCREENSHOT") == null) {
+                Updates.lastCheck = System.currentTimeMillis()
+                runCatching { Updates.check(AppInfo.VERSION) }.getOrNull()?.let { r ->
+                    Toasts.show("CloudStream ${r.version} is available", "Download" to { openUrl(r.url) }, 15.0)
+                }
             }
             Screenshots.runIfRequested(this@AppWindow)
         }

@@ -550,3 +550,8 @@
 }
 .hero-dot:hover { -fx-background-color: rgba(255,255,255,0.7); }
 .hero-dot.active { -fx-background-color: -cs-accent; -fx-min-width: 24; -fx-max-width: 24; }
+.kbd {
+    -fx-background-color: -cs-chip; -fx-background-radius: 7;
+    -fx-border-color: -cs-line; -fx-border-radius: 7; -fx-border-width: 1 1 2 1;
+    -fx-padding: 4 10 4 10; -fx-font-family: "monospace"; -fx-font-size: 12px; -fx-text-fill: -cs-text;
+}

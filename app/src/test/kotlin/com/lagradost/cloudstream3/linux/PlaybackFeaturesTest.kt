@@ -121,6 +121,25 @@ class PlaybackFeaturesTest {
     }
 
     @Test
+    fun `update check compares versions and site addresses can be overridden`() = runBlocking {
+        assertTrue(Updates.newer("V4.0.2", "4.0.1"))
+        assertTrue(Updates.newer("v5.0", "4.9.9"))
+        assertTrue(!Updates.newer("V4.0.1", "4.0.1"))
+        assertTrue(!Updates.newer("4.0", "4.0.1"))
+
+        val api = demo()
+        val original = api.mainUrl
+        try {
+            SiteOverrides.set(api, "https://moved.example/")
+            assertEquals("https://moved.example", Engine.provider(api.name)!!.mainUrl)
+            SiteOverrides.set(api, "not a url")
+            assertEquals(original, Engine.provider(api.name)!!.mainUrl)
+        } finally {
+            SiteOverrides.set(api, null)
+        }
+    }
+
+    @Test
     fun `catalogs can be hidden and reordered per extension`() = runBlocking {
         val api = demo()
         val all = Catalogs.all(api)

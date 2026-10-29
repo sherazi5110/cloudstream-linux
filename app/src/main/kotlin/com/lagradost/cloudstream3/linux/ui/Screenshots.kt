@@ -27,7 +27,7 @@ object Screenshots {
             delay(if (tab == Tab.HOME) 3000 else 1500)
             capture(window, "$prefix-${tab.name.lowercase()}.png")
         }
-        for (category in listOf("appearance", "playback", "developer", "storage")) {
+        for (category in listOf("appearance", "playback", "developer", "storage", "shortcuts", "about")) {
             window.openSettings(category)
             delay(1200)
             capture(window, "$prefix-settings-$category.png")

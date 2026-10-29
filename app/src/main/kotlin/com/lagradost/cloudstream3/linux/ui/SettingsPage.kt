@@ -10,6 +10,8 @@ import com.lagradost.cloudstream3.linux.PluginManager
 import com.lagradost.cloudstream3.linux.ProviderTest
 import com.lagradost.cloudstream3.linux.RepositoryManager
 import com.lagradost.cloudstream3.linux.Settings
+import com.lagradost.cloudstream3.linux.SiteOverrides
+import com.lagradost.cloudstream3.linux.Updates
 import com.lagradost.cloudstream3.linux.StorageInfo
 import javafx.geometry.Pos
 import javafx.scene.Node
@@ -44,6 +46,7 @@ class SettingsPage : StackPane(), Refreshable {
         Category("extensions", "Extensions", Icons.EXTENSION, ::extensions),
         Category("developer", "Developer & logs", Icons.CODE, ::developer),
         Category("storage", "Storage", Icons.STORAGE, ::storage),
+        Category("shortcuts", "Keyboard shortcuts", Icons.KEYBOARD, ::shortcuts),
         Category("about", "About", Icons.INFO, ::about),
     )
 
@@ -373,7 +376,30 @@ class SettingsPage : StackPane(), Refreshable {
                     Toasts.show("Cleared — restart to re-translate")
                 }),
         ),
+        siteAddresses(),
     )
+
+    /** Point an extension at a new domain when its site moves (until the extension is updated). */
+    private fun siteAddresses(): Node {
+        val apis = Engine.providers().filter { it.mainUrl.startsWith("http") }
+        val rows = apis.map { api ->
+            val original = SiteOverrides.original(api)
+            val field = TextField(SiteOverrides.get(api) ?: "").apply { promptText = original; prefWidth = 300.0 }
+            val save = {
+                SiteOverrides.set(api, field.text.takeIf { it.isNotBlank() })
+                Toasts.show(if (field.text.isBlank()) "${api.name} uses its own address again" else "${api.name} now uses ${api.mainUrl}")
+            }
+            field.setOnAction { save() }
+            row(api.name, "Default: $original", hbox(8.0, field,
+                button("Save", null, "btn-ghost", "btn-small") { save() },
+                button(null, Icons.REFRESH, "btn-ghost", "btn-small") { field.clear(); save() }.tooltip("Use the default address"),
+            ))
+        }
+        return section("Site addresses",
+            row("When a site moves", "Streaming sites often change domain before their extension is updated. Enter the new address (e.g. https://newsite.example) to keep using the extension.", Region()),
+            *rows.ifEmpty { listOf(label("No extensions installed.", "muted")) }.toTypedArray(),
+        )
+    }
 
     private fun developer(): List<Node> {
         val tests = VBox(8.0)
@@ -487,8 +513,32 @@ class SettingsPage : StackPane(), Refreshable {
             section("Folders",
                 row("App data", AppDirs.data.absolutePath, button("Open", Icons.FOLDER, "btn-ghost", "btn-small") { openFolder(AppDirs.data) }),
             ),
+            section("Reset",
+                row("Reset settings", "Theme, player, network, home and site-address settings go back to defaults. Extensions, repositories, library and history are kept.",
+                    button("Reset settings", Icons.REFRESH, "btn-ghost", "btn-small") {
+                        if (!confirm("Reset all settings to their defaults?")) return@button
+                        listOf("linux_settings", "home_catalogs", "site_overrides").forEach {
+                            com.lagradost.cloudstream3.linux.Platform.context.getSharedPreferences(it, 0).edit().clear().apply()
+                        }
+                        Theme.mode = Theme.mode // re-applies the (default) theme
+                        Toasts.show("Settings reset. Restart the app to finish.")
+                    }),
+                row("Erase everything", "Deletes all extensions, repositories, library, history, settings and caches, then closes the app. This can't be undone.",
+                    button("Erase all data", Icons.DELETE, "btn-danger", "btn-small") {
+                        if (!confirm("Erase ALL CloudStream data (extensions, library, history, settings)? This can't be undone.")) return@button
+                        AppDirs.data.listFiles()?.forEach { it.deleteRecursively() }
+                        kotlin.system.exitProcess(0)
+                    }),
+            ),
         )
     }
+
+    private fun confirm(text: String): Boolean =
+        javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION, text,
+            javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL).apply {
+            headerText = null
+            dialogPane.stylesheets += SettingsPage::class.java.getResource("/ui/theme.css")!!.toExternalForm()
+        }.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL) == javafx.scene.control.ButtonType.OK
 
     private fun about(): List<Node> = listOf(
         section("CloudStream for Linux",
@@ -497,9 +547,67 @@ class SettingsPage : StackPane(), Refreshable {
             row("Made by", AppInfo.CREDIT, label("", "muted")),
             row("Built on", "The upstream CloudStream library, libVLC through vlcj (player), JavaFX. Online subtitles: OpenSubtitles via the Stremio addon protocol.", label("", "muted")),
         ),
-        section("Keyboard",
-            row("Anywhere", "/ or Ctrl+F search · Esc back · Alt+← back · F11 fullscreen", label("", "muted")),
-            row("In the player", "Space/K pause · ←/→ seek 10 s (Shift: 1 min) · ↑/↓ volume · M mute · F full screen · S sources · C subtitles · A audio language · Z zoom · [ ] speed · G/H subtitle delay · 0–9 jump · N next episode · Esc back", label("", "muted")),
+        section("Updates",
+            row("Check for updates", "Looks for a newer release on GitHub.", updateButton()),
+            row("Check automatically", "Once a day when the app starts.", Switch(Settings.checkUpdates) { Settings.checkUpdates = it }),
+            row("Release notes", Updates.RELEASES, button("Open", Icons.FILE, "btn-ghost", "btn-small") { openUrl(Updates.RELEASES) }),
         ),
     )
+
+    private fun updateButton(): Node {
+        val status = label("", "muted", "small")
+        val check = button("Check now", Icons.REFRESH, "btn-ghost", "btn-small") {}
+        check.setOnAction {
+            check.isDisable = true
+            status.text = "Checking…"
+            ui.launch {
+                val result = runCatching { Updates.check(AppInfo.VERSION) }
+                check.isDisable = false
+                result.fold({ r ->
+                    if (r == null) status.text = "You have the latest version (${AppInfo.VERSION})"
+                    else {
+                        status.text = "Version ${r.version} is available"
+                        openUrl(r.url)
+                    }
+                }, { status.text = "Couldn't check: ${it.message ?: it}" })
+            }
+        }
+        return hbox(10.0, status, check)
+    }
+
+    /** Every shortcut in one searchable list. */
+    private fun shortcuts(): List<Node> {
+        val all = listOf(
+            Triple("Anywhere", "/  or  Ctrl+F", "Search"),
+            Triple("Anywhere", "Esc  or  Alt+←", "Back / close"),
+            Triple("Anywhere", "F11", "Full screen"),
+            Triple("Player", "Space  or  K", "Play / pause"),
+            Triple("Player", "←  /  →  (J / L)", "Seek 10 seconds"),
+            Triple("Player", "Shift + ←  /  →", "Seek 1 minute"),
+            Triple("Player", "↑  /  ↓  or mouse wheel", "Volume"),
+            Triple("Player", "M", "Mute"),
+            Triple("Player", "F  or double-click", "Full screen"),
+            Triple("Player", "S", "Sources"),
+            Triple("Player", "C", "Subtitles (and online search)"),
+            Triple("Player", "A", "Audio language and equalizer"),
+            Triple("Player", "Z", "Cycle zoom (fit, fill, stretch, …)"),
+            Triple("Player", "[  /  ]", "Slower / faster"),
+            Triple("Player", "G  /  H", "Subtitles earlier / later"),
+            Triple("Player", "0 – 9", "Jump to 0 % – 90 %"),
+            Triple("Player", "Home", "Back to the start"),
+            Triple("Player", "Shift + S", "Screenshot to Pictures/CloudStream"),
+            Triple("Player", "N", "Next episode"),
+        )
+        val list = VBox()
+        fun render(q: String) {
+            val shown = all.filter { q.isBlank() || it.second.contains(q, true) || it.third.contains(q, true) || it.first.contains(q, true) }
+            list.children.setAll(shown.map { (scope, keys, action) ->
+                row(action, scope, label(keys, "kbd"))
+            }.ifEmpty { listOf(label("No shortcut matches “$q”.", "muted")) })
+        }
+        render("")
+        val search = TextField().apply { promptText = "Filter shortcuts (e.g. volume, subtitles, seek)"; styleClass += "search-field" }
+        search.textProperty().addListener { _, _, v -> render(v.trim()) }
+        return listOf(search, vbox(10.0, label("SHORTCUTS", "section-label"), list.apply { styleClass += "card"; pad(4.0, 18.0) }))
+    }
 }

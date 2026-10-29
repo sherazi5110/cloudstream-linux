@@ -181,7 +181,13 @@ class HomePage : StackPane(), Refreshable {
      */
     private inner class HeroSlider(private val api: MainAPI, private val items: List<SearchResponse>) : StackPane() {
         private var index = 0
-        private val dots = hbox(7.0).apply { alignment = Pos.CENTER; isPickOnBounds = false }
+        private val dots = hbox(7.0).apply {
+            alignment = Pos.CENTER
+            isPickOnBounds = false
+            // Only as big as the dots themselves, so it sits at the banner's bottom edge.
+            maxHeight = Region.USE_PREF_SIZE
+            maxWidth = Region.USE_PREF_SIZE
+        }
         private val timer = javafx.animation.Timeline(javafx.animation.KeyFrame(javafx.util.Duration.seconds(8.0), {
             if (onScreen()) show(index + 1)
         })).apply { cycleCount = javafx.animation.Animation.INDEFINITE }
