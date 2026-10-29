@@ -8,6 +8,10 @@ that headers flow from the extension's ExtractorLink to the player.
 Also: /hls/ (an HLS stream that needs an "X-CS-Token: demo" header on every request,
 like token-protected hosts), and /stremio/ stand-ins for the Cinemeta and OpenSubtitles
 addons the player's online subtitle search uses.
+
+/addon/ is a whole Stremio add-on ("Test Add-on"): manifest, catalogs (with search and
+skip paging), metadata (a film and a series with episodes), streams (with proxy headers,
+plus a torrent-only stream the app must skip) and subtitles.
 """
 import json, os, sys, time, urllib.parse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -31,6 +35,68 @@ FILES = [{"name": "test_film_640.mp4", "format": "h.264", "height": "360"},
          {"name": "test_film.en.srt", "format": "SubRip"}]
 
 class Handler(BaseHTTPRequestHandler):
+    def addon(self, parts):
+        root = f"http://localhost:{self.server.server_port}"
+        def meta(fid, full=False):
+            m = {"id": f"tst:{fid}", "type": "movie", "name": ITEMS[fid]["title"], "releaseInfo": ITEMS[fid]["year"],
+                 "poster": f"{root}/media/poster_{fid}.jpg", "imdbRating": "7.4"}
+            if full:
+                m.update({"background": f"{root}/media/backdrop_{fid}.jpg", "description": ITEMS[fid]["description"].replace("<p>", "").replace("</p>", "").replace("<b>", "").replace("</b>", ""),
+                          "genres": ["Classic", "Comedy"], "cast": ["Ada Scanline", "Vic Raster"], "runtime": "94 min", "certification": "PG"})
+            return m
+        series = {"id": "tst:pixel_city", "type": "series", "name": "Pixel City", "releaseInfo": "2024–", "poster": f"{root}/media/poster_pixel_city.jpg",
+                  "background": f"{root}/media/backdrop_pixel_city.jpg", "description": "A detective chases a missing frame.", "genres": ["Mystery"],
+                  "certification": "TV-14",
+                  "videos": [{"id": f"tst:pixel_city:{s}:{e}", "title": f"Episode {e}", "season": s, "episode": e, "thumbnail": f"{root}/media/ep_{e}.jpg"}
+                             for s in (1, 2) for e in (1, 2, 3)]}
+        if parts == ["manifest.json"]:
+            return self.send(200, json.dumps({
+                "id": "org.test.addon", "version": "1.2.0", "name": "Test Add-on", "description": "A Stremio add-on for tests.",
+                "logo": f"{root}/media/poster.png", "types": ["movie", "series"], "idPrefixes": ["tst"],
+                "resources": ["catalog", {"name": "meta", "types": ["movie", "series"], "idPrefixes": ["tst"]}, "stream", "subtitles"],
+                "catalogs": [
+                    {"type": "movie", "id": "top", "name": "Top films", "extra": [{"name": "search"}, {"name": "skip"}]},
+                    {"type": "series", "id": "popular", "name": "Popular"},
+                    {"type": "movie", "id": "searchonly", "name": "Search only", "extra": [{"name": "search", "isRequired": True}]},
+                ]}))
+        if len(parts) >= 3 and parts[0] == "catalog":
+            kind, cid = parts[1], parts[2].removesuffix(".json")
+            extra = parts[3].removesuffix(".json") if len(parts) > 3 else ""
+            if kind == "series":
+                return self.send(200, json.dumps({"metas": [{k: v for k, v in series.items() if k != "videos"}]}))
+            metas = [meta(fid) for fid in ITEMS]
+            if extra.startswith("search="):
+                q = urllib.parse.unquote(extra.removeprefix("search=")).lower()
+                metas = [m for m in metas if q in m["name"].lower()]
+            elif extra.startswith("skip="):
+                skip = int(extra.removeprefix("skip="))
+                metas = metas[skip:skip + 6]
+            else:
+                metas = metas[:6]
+            return self.send(200, json.dumps({"metas": metas}))
+        if len(parts) == 3 and parts[0] == "meta":
+            mid = urllib.parse.unquote(parts[2].removesuffix(".json"))
+            if mid == series["id"]:
+                return self.send(200, json.dumps({"meta": series}))
+            fid = mid.removeprefix("tst:")
+            if fid in ITEMS:
+                return self.send(200, json.dumps({"meta": meta(fid, full=True)}))
+            return self.send(404, "{}")
+        if len(parts) == 3 and parts[0] == "stream":
+            vid = urllib.parse.unquote(parts[2].removesuffix(".json"))
+            fid = vid.split(":")[1] if ":" in vid else vid
+            film = fid if fid in ITEMS else "night_of_the_test_pattern"
+            return self.send(200, json.dumps({"streams": [
+                {"name": "Test Add-on\n360p", "title": "Direct MP4", "url": f"{root}/download/{film}/test_film_640.mp4",
+                 "behaviorHints": {"notWebReady": True, "proxyHeaders": {"request": {"Referer": f"{root}/"}}}},
+                {"name": "Test Add-on 720p", "title": "HLS", "url": f"{root}/hls/master.m3u8",
+                 "behaviorHints": {"proxyHeaders": {"request": {"X-CS-Token": "demo"}}}},
+                {"name": "Torrent", "title": "1080p torrent", "infoHash": "0123456789abcdef0123456789abcdef01234567"},
+            ]}))
+        if len(parts) == 3 and parts[0] == "subtitles":
+            return self.send(200, json.dumps({"subtitles": [{"id": "s1", "lang": "eng", "url": f"{root}/stremio/subs/file/eng.srt"}]}))
+        return self.send(404, "{}")
+
     def send(self, code, body, ctype="application/json"):
         data = body if isinstance(body, bytes) else body.encode()
         self.send_response(code)
@@ -94,6 +160,8 @@ class Handler(BaseHTTPRequestHandler):
             text = {"eng": "Online subtitle", "spa": "Subtítulo en línea", "fre": "Sous-titre en ligne", "ara": "ترجمة"}.get(lang, lang)
             srt = "".join(f"{n}\n00:{m:02d}:00,000 --> 00:{m:02d}:59,000\n{text} ({lang}) — minute {m}\n\n" for n, m in enumerate(range(0, 3), 1))
             return self.send(200, srt, "application/x-subrip")
+        if parts and parts[0] == "addon":
+            return self.addon(parts[1:])
         if url.path == "/slow":
             # A slow extractor: answers after a few seconds.
             time.sleep(float(qs.get("s", ["8"])[0]))
