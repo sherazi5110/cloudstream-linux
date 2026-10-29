@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.linux.Bookmark
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.Library
+import com.lagradost.cloudstream3.linux.Settings
 import com.lagradost.cloudstream3.linux.Playable
 import javafx.geometry.Pos
 import javafx.scene.Node
@@ -218,6 +219,9 @@ class DetailsPage(
         val image = ImageView()
         Images.load(image, ep.posterUrl ?: r.backgroundPosterUrl ?: r.posterUrl, w, h, r.posterHeaders)
         val progress = Library.progress(api.name, ep.data)?.let { if (it.duration > 0) it.position / it.duration else null }
+        // Anti-spoiler: unwatched episodes show a blurred thumbnail and no description.
+        val hidden = Settings.antiSpoiler && (progress == null || progress < 0.92) && ep.posterUrl != null
+        if (hidden) image.effect = javafx.scene.effect.GaussianBlur(26.0)
         val play = StackPane(icon(Icons.PLAY, 20.0).apply { style += "-fx-background-color: white;" }).apply {
             style = "-fx-background-color: rgba(0,0,0,0.55); -fx-background-radius: 999;"
             setMaxSize(46.0, 46.0)
@@ -236,7 +240,10 @@ class DetailsPage(
         val text = vbox(4.0,
             label(number, "episode-number"),
             label(ep.name ?: ep.label, "episode-title").apply { maxWidth = w - 20 },
-            label(ep.description ?: "", "muted", "small").apply { isWrapText = true; maxWidth = w - 20; maxHeight = 34.0; isVisible = !ep.description.isNullOrBlank(); isManaged = isVisible },
+            label(if (hidden) "Description hidden (anti-spoiler)" else ep.description ?: "", "muted", "small").apply {
+                isWrapText = true; maxWidth = w - 20; maxHeight = 34.0
+                isVisible = hidden || !ep.description.isNullOrBlank(); isManaged = isVisible
+            },
         ).pad(10.0, 12.0, 12.0, 12.0)
         return VBox(thumb, text).apply {
             styleClass += "episode-card"

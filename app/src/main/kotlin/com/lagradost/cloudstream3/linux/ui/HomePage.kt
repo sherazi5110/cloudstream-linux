@@ -103,6 +103,7 @@ class HomePage : StackPane(), Refreshable {
         Settings.lastHomeProvider = source.key
         job?.cancel()
         sections.clear()
+        (hero as? HeroSlider)?.stop()
         hero = null
         heroIndex = Int.MAX_VALUE
         loading = true
@@ -111,7 +112,12 @@ class HomePage : StackPane(), Refreshable {
             val mixed = source.apis.size > 1
             Engine.home(source.apis).collect { row ->
                 // Feature the first item of the first section, whichever order sections arrive in.
-                if (row.order < heroIndex) row.list.list.firstOrNull()?.let { hero = hero(row.api, it); heroIndex = row.order }
+                if (row.order < heroIndex && row.list.list.isNotEmpty()) {
+                    (hero as? HeroSlider)?.stop()
+                    val featured = row.list.list.take(if (Settings.heroSlider) 6 else 1)
+                    hero = if (featured.size > 1) HeroSlider(row.api, featured) else hero(row.api, featured.first())
+                    heroIndex = row.order
+                }
                 sections[row.order] = shelf(row, mixed)
                 render()
             }
@@ -167,6 +173,57 @@ class HomePage : StackPane(), Refreshable {
 
     companion object {
         const val FEED = "__feed__"
+    }
+
+    /**
+     * The featured banner, rotating through several titles with a crossfade every 8 s.
+     * It only ticks while actually on screen, so a hidden home page costs nothing.
+     */
+    private inner class HeroSlider(private val api: MainAPI, private val items: List<SearchResponse>) : StackPane() {
+        private var index = 0
+        private val dots = hbox(7.0).apply { alignment = Pos.CENTER; isPickOnBounds = false }
+        private val timer = javafx.animation.Timeline(javafx.animation.KeyFrame(javafx.util.Duration.seconds(8.0), {
+            if (onScreen()) show(index + 1)
+        })).apply { cycleCount = javafx.animation.Animation.INDEFINITE }
+
+        init {
+            minHeight = 390.0; maxHeight = 390.0
+            children += hero(api, items[0])
+            children += dots
+            StackPane.setAlignment(dots, Pos.BOTTOM_CENTER)
+            StackPane.setMargin(dots, javafx.geometry.Insets(0.0, 0.0, 16.0, 0.0))
+            renderDots()
+            timer.play()
+        }
+
+        private fun onScreen(): Boolean =
+            scene?.window?.isShowing == true && generateSequence(this as Node) { it.parent }.all { it.isVisible }
+
+        fun show(i: Int) {
+            index = (i + items.size) % items.size
+            val next = hero(api, items[index]).apply { opacity = 0.0 }
+            val old = children.firstOrNull { it !== dots }
+            children.add(children.indexOf(dots), next)
+            javafx.animation.FadeTransition(javafx.util.Duration.millis(650.0), next).apply {
+                toValue = 1.0
+                setOnFinished { old?.let { children.remove(it) } }
+                play()
+            }
+            renderDots()
+            timer.playFromStart()
+        }
+
+        private fun renderDots() {
+            dots.children.setAll(items.indices.map { i ->
+                Region().apply {
+                    styleClass += "hero-dot"
+                    if (i == index) styleClass += "active"
+                    onClick { if (i != index) show(i) }
+                }
+            })
+        }
+
+        fun stop() = timer.stop()
     }
 
     private fun hero(api: MainAPI, item: SearchResponse): Node {

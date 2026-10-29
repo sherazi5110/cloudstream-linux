@@ -70,6 +70,16 @@ object Settings {
         get() = string("player_volume", "100").toIntOrNull()?.coerceIn(0, 200) ?: 100
         set(v) = put("player_volume", v)
 
+    /** Home: rotate the featured banner through the first catalog's top titles. */
+    var heroSlider: Boolean
+        get() = string("hero_slider", "true") == "true"
+        set(v) = put("hero_slider", v)
+
+    /** Hide thumbnails and descriptions of episodes not watched yet. */
+    var antiSpoiler: Boolean
+        get() = string("anti_spoiler", "false") == "true"
+        set(v) = put("anti_spoiler", v)
+
     /** VLC equalizer preset name ("Rock", "Classical", …); empty = off. */
     var playerEqualizer: String
         get() = string("player_equalizer", "")
