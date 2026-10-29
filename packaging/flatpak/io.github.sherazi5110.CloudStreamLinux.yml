@@ -55,6 +55,11 @@ modules:
 
   # libVLC 3 (VideoLAN's release tarball, as mirrored in Ubuntu's archive).
   - name: vlc
+    build-options:
+      env:
+        # VLC's configure looks for a native compiler named c99/c11 for its build tools;
+        # the Freedesktop SDK only has gcc.
+        BUILDCC: gcc -std=gnu11
     config-opts:
       - --disable-static
       - --disable-vlc          # engine only: no VLC program
