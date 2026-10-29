@@ -65,10 +65,34 @@ object Settings {
         get() = string("auto_update_extensions", "true").toBoolean()
         set(v) = put("auto_update_extensions", v)
 
-    /** Built-in player volume, 0–150 (VLC allows boosting above 100). */
+    /** Built-in player volume, 0–200 (VLC allows boosting above 100). */
     var playerVolume: Int
-        get() = string("player_volume", "100").toIntOrNull()?.coerceIn(0, 150) ?: 100
+        get() = string("player_volume", "100").toIntOrNull()?.coerceIn(0, 200) ?: 100
         set(v) = put("player_volume", v)
+
+    /** VLC equalizer preset name ("Rock", "Classical", …); empty = off. */
+    var playerEqualizer: String
+        get() = string("player_equalizer", "")
+        set(v) = put("player_equalizer", v)
+
+    /** Audio languages to pick automatically, e.g. "en" or "ja,en"; empty = the stream's default. */
+    var audioLanguage: String
+        get() = string("audio_language", "")
+        set(v) = put("audio_language", v.trim())
+
+    /** Subtitle look: size SMALL/NORMAL/LARGE/HUGE, text colour, outline 0–6, background box. */
+    var subtitleSize: String
+        get() = string("subtitle_size", "NORMAL")
+        set(v) = put("subtitle_size", v)
+    var subtitleColor: String
+        get() = string("subtitle_color", "#ffffff")
+        set(v) = put("subtitle_color", v)
+    var subtitleOutline: Int
+        get() = string("subtitle_outline", "4").toIntOrNull()?.coerceIn(0, 6) ?: 4
+        set(v) = put("subtitle_outline", v)
+    var subtitleBackground: Boolean
+        get() = string("subtitle_background", "false") == "true"
+        set(v) = put("subtitle_background", v)
 
     /** Built-in player zoom mode, a [com.lagradost.cloudstream3.linux.ui.Zoom] name. */
     var playerZoom: String

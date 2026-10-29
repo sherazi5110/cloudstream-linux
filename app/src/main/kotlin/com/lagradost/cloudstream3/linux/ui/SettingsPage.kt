@@ -262,8 +262,8 @@ class SettingsPage : StackPane(), Refreshable {
                 row("Player engine", if (!vlcEngine) "VLC's libraries aren't installed, so videos can't play. Run: sudo apt install libvlc5 vlc-plugin-base" else
                     "Videos play inside this window using VLC ${Vlc.version.orEmpty()}: every format VLC plays, hardware decoding, source switching, online subtitles, audio languages, speed and zoom.",
                     label(if (vlcEngine) "Ready" else "Not installed", if (vlcEngine) "good-text" else "error-text")),
-                row("Battery saver", "For low-end PCs and laptops on battery: skips the H.264 deblocking filter (much less CPU), buffers longer and does no extra processing. Hardware decoding stays on. Restart the app to apply.",
-                    Switch(Settings.batterySaver) { Settings.batterySaver = it }),
+                row("Battery saver", "For low-end PCs and laptops on battery: skips the H.264 deblocking filter (much less CPU), buffers longer and does no extra processing. Hardware decoding stays on.",
+                    Switch(Settings.batterySaver) { Settings.batterySaver = it; Vlc.optionsChanged(Playback.active != null) }),
             ),
             section("Sources",
                 row("Auto-play best source", "Start the best source automatically instead of picking from the list.",
@@ -278,7 +278,42 @@ class SettingsPage : StackPane(), Refreshable {
                     Switch(Settings.autoPlayNext) { Settings.autoPlayNext = it }),
                 row("Subtitle languages", "Language codes to turn on automatically, e.g. en or ar,en. Empty = subtitles off by default.",
                     textSetting(Settings.subtitleLanguage, "en") { Settings.subtitleLanguage = it }),
+                row("Audio languages", "Picked automatically when a stream has several, e.g. ja for original anime audio, or en. Empty = the stream's default.",
+                    textSetting(Settings.audioLanguage, "en") { Settings.audioLanguage = it }),
             ),
+            subtitleStyle(),
+        )
+    }
+
+    /** Subtitle look, with a live preview. VLC applies it from the next video on. */
+    private fun subtitleStyle(): Node {
+        val sample = Label("The quick brown fox jumps over the lazy dog")
+        fun refresh() {
+            val px = when (Settings.subtitleSize) { "SMALL" -> 17; "LARGE" -> 27; "HUGE" -> 34; else -> 21 }
+            val outline = Settings.subtitleOutline
+            sample.style = "-fx-font-size: ${px}px; -fx-font-weight: bold; -fx-text-fill: ${Settings.subtitleColor};" +
+                (if (outline > 0) " -fx-effect: dropshadow(gaussian, black, ${outline * 1.6}, 0.9, 0, 0);" else "") +
+                (if (Settings.subtitleBackground) " -fx-background-color: rgba(0,0,0,0.67); -fx-padding: 2 8 2 8;" else "")
+        }
+        fun changed() { refresh(); Vlc.optionsChanged(Playback.active != null) }
+        refresh()
+        val preview = StackPane(sample).apply { styleClass += "subtitle-preview"; alignment = Pos.BOTTOM_CENTER }
+        val colors = hbox(8.0).apply {
+            listOf("#ffffff", "#fff176", "#80deea", "#a5d6a7", "#ffab91").forEach { c ->
+                children += Region().apply {
+                    styleClass += "swatch"; style = "-fx-background-color: $c;"
+                    if (Settings.subtitleColor.equals(c, true)) styleClass += "selected"
+                    onClick { Settings.subtitleColor = c; changed(); open("playback") }
+                }
+            }
+        }
+        return section("Subtitle style",
+            preview.pad(4.0, 0.0, 8.0, 0.0),
+            row("Size", null, combo(listOf("SMALL", "NORMAL", "LARGE", "HUGE"), Settings.subtitleSize, { it.lowercase().replaceFirstChar(Char::uppercase) }) { Settings.subtitleSize = it; changed() }),
+            row("Colour", null, colors),
+            row("Outline", "A dark edge keeps text readable on bright scenes.",
+                combo(listOf(0, 2, 4, 6), Settings.subtitleOutline, { when (it) { 0 -> "None"; 2 -> "Thin"; 4 -> "Normal"; else -> "Thick" } }) { Settings.subtitleOutline = it; changed() }),
+            row("Background box", "A dark box behind the text.", Switch(Settings.subtitleBackground) { Settings.subtitleBackground = it; changed() }),
         )
     }
 

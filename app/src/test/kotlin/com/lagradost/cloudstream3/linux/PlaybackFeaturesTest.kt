@@ -190,6 +190,12 @@ class PlaybackFeaturesTest {
             assertTrue(time.get() >= 1500, "time stuck at ${time.get()}")
             assertEquals(480, width.get())
             assertTrue(subtitleTracks.get() >= 1, "subtitle file not added")
+            // Equalizer presets and screenshots (the player's Audio menu and camera button).
+            assertTrue("Rock" in factory.equalizer().presets())
+            player.audio().setEqualizer(factory.equalizer().newEqualizer("Rock"))
+            val shot = File.createTempFile("cs-shot", ".png").apply { delete(); deleteOnExit() }
+            assertTrue(player.snapshots().save(shot), "snapshot failed")
+            assertTrue(shot.length() > 1000, "snapshot is empty")
             // Seeking (what the player's seek bar and source switching do).
             player.controls().setTime(60_000)
             Thread.sleep(2500)

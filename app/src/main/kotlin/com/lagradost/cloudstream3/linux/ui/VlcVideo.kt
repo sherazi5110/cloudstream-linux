@@ -25,7 +25,42 @@ import kotlin.math.roundToInt
 
 /** libVLC, loaded once. Null when VLC isn't installed (sudo apt install vlc). */
 object Vlc {
-    val factory: MediaPlayerFactory? by lazy {
+    private var current: MediaPlayerFactory? = null
+    private var loaded = false
+    private var stale = false
+
+    val factory: MediaPlayerFactory?
+        @Synchronized get() {
+            if (!loaded) { loaded = true; current = create() }
+            return current
+        }
+
+    /**
+     * Subtitle style and battery saver are engine options: restart the engine to apply
+     * them, now if nothing is playing, otherwise when playback ends.
+     */
+    @Synchronized fun optionsChanged(playing: Boolean) {
+        if (playing) { stale = true; return }
+        if (loaded) runCatching { current?.release() }
+        current = null; loaded = false; stale = false
+    }
+
+    @Synchronized fun playbackEnded() {
+        if (stale) optionsChanged(playing = false)
+    }
+
+    private fun subtitleArgs(): List<String> {
+        val size = when (Settings.subtitleSize) { "SMALL" -> 20; "LARGE" -> 12; "HUGE" -> 9; else -> 16 }
+        val color = Settings.subtitleColor.removePrefix("#").toIntOrNull(16) ?: 0xffffff
+        return buildList {
+            add("--freetype-rel-fontsize=$size")
+            add("--freetype-color=$color")
+            add("--freetype-outline-thickness=${Settings.subtitleOutline}")
+            if (Settings.subtitleBackground) { add("--freetype-background-opacity=170"); add("--freetype-background-color=0") }
+        }
+    }
+
+    private fun create(): MediaPlayerFactory? =
         runCatching {
             // vlcj only looks in the system's x86 library folders; add the Flatpak's own
             // libVLC (/app/lib) and ARM folders (e.g. ARM Chromebooks).
@@ -42,8 +77,7 @@ object Vlc {
                 add("--no-snapshot-preview")
                 add("--no-xlib")                   // frames go to callbacks; never touch X11 from VLC
                 add("--avcodec-hw=any")            // VAAPI/VDPAU when available, software otherwise
-                add("--freetype-rel-fontsize=16")  // subtitle size (VLC's "normal" is 16)
-                add("--freetype-outline-thickness=4")
+                addAll(subtitleArgs())
                 if (Settings.batterySaver) {
                     add("--avcodec-skiploopfilter=4")  // skip H.264 deblocking: much less CPU
                     add("--avcodec-fast")
@@ -51,7 +85,6 @@ object Vlc {
             }
             MediaPlayerFactory(args)
         }.onFailure { System.err.println("W/vlc: libVLC not available: $it") }.getOrNull()
-    }
 
     val version: String? get() = factory?.application()?.version()
 }

@@ -105,12 +105,17 @@ class BuiltinPlayer(
     private val durationLabel = label("0:00", "player-time")
     private val playButton = iconButton(Icons.PLAY, "Play / pause (Space)") { togglePause() }
     private val muteButton = iconButton(Icons.VOLUME_UP, "Mute (M)") { toggleMute() }
-    private val volume = Slider(0.0, 150.0, Settings.playerVolume.toDouble()).apply {
+    private val volume = Slider(0.0, 200.0, Settings.playerVolume.toDouble()).apply {
         styleClass += "player-volume"
         prefWidth = 110.0; maxWidth = 110.0
         valueProperty().addListener { _, _, v -> setVolume(v.toInt(), show = false) }
     }
     private val sourceChip = label("", "player-chip")
+    /** Wall clock and when the video will end, e.g. "21:34 · ends 22:51". */
+    private val clock = label("", "player-clock")
+    private var clockMinute = -1L
+    /** Audio language is picked once per opened source. */
+    private var audioPicked = false
     private val top: Node
     private val bottom: Node
     private val menu = PlayerMenu()
@@ -127,6 +132,7 @@ class BuiltinPlayer(
             iconButton(Icons.BACK, "Back (Esc)") { back() },
             vbox(2.0, label(response.name, "player-title"), label(if (all.size > 1) playable.label else api.name, "player-subtitle")),
             spacer(),
+            clock,
             sourceChip,
         ).apply { styleClass += "player-top" }
 
@@ -145,6 +151,7 @@ class BuiltinPlayer(
             iconButton(Icons.LANGUAGE, "Audio language (A)") { showAudio() },
             iconButton(Icons.SPEED, "Speed") { showSpeed() },
             iconButton(Icons.ASPECT, "Zoom (Z)") { showZoom() },
+            iconButton(Icons.CAMERA, "Screenshot (Shift+S)") { screenshot() },
             iconButton(Icons.FULLSCREEN, "Full screen (F)") { toggleFullscreen() },
         )
         bottom = VBox(6.0, seek, hbox(8.0, left, spacer(), right)).apply { styleClass += "player-bottom" }
@@ -192,6 +199,7 @@ class BuiltinPlayer(
         startAt?.takeIf { it > 1000 }?.let { opts += ":start-time=${it / 1000.0}" }
         addedSubtitles.clear()
         slaveNames.clear()
+        audioPicked = false
         subtitlesFor = null
         if (!player.media().play(url, *opts.toTypedArray())) {
             onError()
@@ -238,7 +246,11 @@ class BuiltinPlayer(
         Nav.window.exitPlayer(this)
         Playback.active = null
         // stop() waits for VLC's threads; never block the UI on it.
-        Thread({ runCatching { player.controls().stop() }; runCatching { player.release() } }, "vlc-release").start()
+        Thread({
+            runCatching { player.controls().stop() }
+            runCatching { player.release() }
+            Vlc.playbackEnded()
+        }, "vlc-release").start()
         val then = leaving
         when {
             then != null -> then()
@@ -263,6 +275,8 @@ class BuiltinPlayer(
             spinner.isVisible = false
             playButton.graphic = icon(Icons.PAUSE, 22.0)
             setVolume(volume.value.toInt(), show = false)
+            applyEqualizer(Settings.playerEqualizer)
+            pickAudioLanguage()
             scheduleHide()
         }
 
@@ -280,6 +294,7 @@ class BuiltinPlayer(
             position = newTime
             if (!seek.dragging) seek.set(newTime, duration)
             timeLabel.text = format(newTime)
+            updateClock()
             if (duration > 0 && abs(newTime - saved) >= 10_000) { saved = newTime; record() }
             if (newTime > 0) spinner.isVisible = false
         }
@@ -295,6 +310,7 @@ class BuiltinPlayer(
 
         override fun elementaryStreamAdded(mediaPlayer: MediaPlayer, type: uk.co.caprica.vlcj.media.TrackType, id: Int) = fx {
             if (subtitlesFor != current.url) { subtitlesFor = current.url; addExtensionSubtitles() }
+            if (type == uk.co.caprica.vlcj.media.TrackType.AUDIO) pickAudioLanguage()
         }
 
         override fun finished(mediaPlayer: MediaPlayer) = fx {
@@ -364,7 +380,7 @@ class BuiltinPlayer(
     }
 
     private fun setVolume(v: Int, show: Boolean = true) {
-        val clamped = v.coerceIn(0, 150)
+        val clamped = v.coerceIn(0, 200)
         if (volume.value.toInt() != clamped) volume.value = clamped.toDouble()
         player.audio().setVolume(clamped)
         Settings.playerVolume = clamped
@@ -423,15 +439,82 @@ class BuiltinPlayer(
         flash("Zoom: ${z.label}")
     }
 
+    private fun showEqualizer() {
+        val presets = Vlc.factory?.equalizer()?.presets().orEmpty()
+        val now = Settings.playerEqualizer
+        val items = listOf(PlayerMenu.Item("Back", icon = Icons.BACK, keepOpen = true) { showAudio() },
+            PlayerMenu.Item("Off", active = now.isBlank()) { setEqualizer("") }) +
+            presets.filter { it != "Flat" }.map { name -> PlayerMenu.Item(name, active = name == now) { setEqualizer(name) } }
+        menu.open("equalizer", "Equalizer", items)
+    }
+
+    private fun setEqualizer(name: String) {
+        Settings.playerEqualizer = name
+        applyEqualizer(name)
+        flash(if (name.isBlank()) "Equalizer off" else "Equalizer: $name")
+        menu.close()
+    }
+
+    private fun applyEqualizer(name: String) {
+        val eq = name.takeIf { it.isNotBlank() }?.let { runCatching { Vlc.factory?.equalizer()?.newEqualizer(it) }.getOrNull() }
+        player.audio().setEqualizer(eq)
+    }
+
+    /** Selects the first audio track in a preferred language (Settings → Playback). */
+    private fun pickAudioLanguage() {
+        val wanted = Settings.audioLanguage
+        if (audioPicked || wanted.isBlank()) return
+        val tracks = player.audio().trackDescriptions().filter { it.id() >= 0 }
+        if (tracks.size < 2) return
+        val match = tracks.firstOrNull { t ->
+            val d = t.description().lowercase()
+            wanted.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.any { w ->
+                val name = OnlineSubtitles.languageName(w).lowercase()
+                d.contains("[$w]") || d.contains(name) || runCatching { d.contains(java.util.Locale(w).isO3Language) }.getOrDefault(false)
+            }
+        } ?: return
+        audioPicked = true
+        if (match.id() != player.audio().track()) {
+            player.audio().setTrack(match.id())
+            flash("Audio: ${cleanTrack(match.description())}")
+        }
+    }
+
+    private fun updateClock() {
+        val now = System.currentTimeMillis()
+        val minute = now / 60_000 + (if (duration > 0) (duration - position) / 60_000 else 0)
+        if (minute == clockMinute) return
+        clockMinute = minute
+        val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+        val zone = java.time.ZoneId.systemDefault()
+        val time = java.time.Instant.ofEpochMilli(now).atZone(zone).format(fmt)
+        val rate = player.status().rate().takeIf { it > 0 } ?: 1f
+        val ends = if (duration > 0) java.time.Instant.ofEpochMilli(now + ((duration - position) / rate).toLong()).atZone(zone).format(fmt) else null
+        clock.text = if (ends != null) "$time · ends $ends" else time
+    }
+
+    /** Saves the current frame to ~/Pictures/CloudStream. */
+    private fun screenshot() {
+        val dir = java.io.File(System.getProperty("user.home"), "Pictures/CloudStream").apply { mkdirs() }
+        val name = (response.name + if (all.size > 1) " ${playable.label}" else "").replace(Regex("[^\\p{L}\\p{N} ._-]"), "").trim()
+        val file = java.io.File(dir, "$name ${format(position).replace(':', '-')}.png")
+        Thread({
+            val ok = runCatching { player.snapshots().save(file) }.getOrDefault(false)
+            Platform.runLater { flash(if (ok) "Screenshot saved to Pictures/CloudStream" else "Couldn't take a screenshot") }
+        }, "vlc-snapshot").start()
+    }
+
     private fun cycleZoom() = setZoom(Zoom.entries[(video.zoom.ordinal + 1) % Zoom.entries.size])
 
     private fun showAudio() {
         val tracks = player.audio().trackDescriptions().filter { it.id() >= 0 }
         val selected = player.audio().track()
         val delay = player.audio().delay() / 1000
+        val eq = Settings.playerEqualizer.ifBlank { "Off" }
         val items = tracks.map { t ->
             PlayerMenu.Item(cleanTrack(t.description()), active = t.id() == selected) { player.audio().setTrack(t.id()); flash("Audio: ${cleanTrack(t.description())}"); menu.close() }
         }.ifEmpty { listOf(PlayerMenu.Item("No audio tracks yet", enabled = false) {}) } + listOf(
+            PlayerMenu.Item("Equalizer: $eq", icon = Icons.TUNE, keepOpen = true) { showEqualizer() },
             PlayerMenu.Item("Audio delay: $delay ms", enabled = false) {},
             PlayerMenu.Item("Delay −50 ms", keepOpen = true) { player.audio().setDelay(player.audio().delay() - 50_000); showAudio() },
             PlayerMenu.Item("Delay +50 ms", keepOpen = true) { player.audio().setDelay(player.audio().delay() + 50_000); showAudio() },
@@ -603,7 +686,7 @@ class BuiltinPlayer(
             KeyCode.M -> toggleMute()
             KeyCode.F, KeyCode.F11 -> toggleFullscreen()
             KeyCode.ESCAPE, KeyCode.BACK_SPACE -> back()
-            KeyCode.S -> showSources()
+            KeyCode.S -> if (e.isShiftDown) screenshot() else showSources()
             KeyCode.C -> showSubtitles()
             KeyCode.A -> showAudio()
             KeyCode.Z -> cycleZoom()

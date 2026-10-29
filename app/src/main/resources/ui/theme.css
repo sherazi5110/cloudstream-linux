@@ -539,3 +539,8 @@
 }
 .glass .poster-frame { -fx-effect: dropshadow(gaussian, rgba(4,2,20,0.55), 18, 0.15, 0, 8); }
 .glass .combo-box-popup .list-view { -fx-background-color: #1c1838; }
+.player-clock { -fx-text-fill: rgba(255,255,255,0.85); -fx-font-size: 13px; -fx-padding: 0 6 0 0; }
+.subtitle-preview {
+    -fx-background-color: linear-gradient(to bottom right, #1f2937, #0f172a 60%, #312e81);
+    -fx-background-radius: 12; -fx-min-height: 120; -fx-pref-height: 120; -fx-padding: 0 0 16 0;
+}
