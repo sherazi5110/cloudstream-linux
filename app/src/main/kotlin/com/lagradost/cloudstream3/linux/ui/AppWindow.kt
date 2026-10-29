@@ -38,7 +38,7 @@ import kotlin.system.exitProcess
 
 object AppInfo {
     const val NAME = "CloudStream for Linux"
-    const val VERSION = "4.0.1"
+    const val VERSION = "5.0.0"
     const val CREDIT = "Tennant Creek"
 }
 

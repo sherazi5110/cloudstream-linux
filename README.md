@@ -7,13 +7,15 @@ Run **CloudStream extensions on Ubuntu/Linux**, from the same repositories the A
 - **Built-in player, VLC inside the app:** libVLC decodes (every format VLC plays, hardware-accelerated when available) and the video is drawn inside the app window, so it works on X11, Wayland and ChromeOS alike. It has its own controls:
   - switch sources mid-playback, keeping your place; a failed source falls back to the next one automatically;
   - subtitles from the extension, **from the internet (OpenSubtitles, no account)** or from a file, with timing adjustment;
-  - audio language, speed 0.25–2×, and zoom (Fit, Fill, Stretch, Original, 16:9, 4:3, 21:9);
-  - a seek bar with time preview, volume up to 150%, next episode, full screen and keyboard shortcuts.
+  - audio language (picked automatically if you set a preference), an **equalizer**, speed 0.25–2×, and zoom (Fit, Fill, Stretch, Original, 16:9, 4:3, 21:9);
+  - subtitle styling (size, colour, outline, background box) with a live preview;
+  - a seek bar with time preview, a clock with "ends at" time, **screenshots**, volume up to 200%, next episode, full screen and keyboard shortcuts.
 
   A header proxy lets streams that need tokens or cookies play. Battery saver suits low-end PCs.
 - **Catalogs your way:** for each extension, turn its home catalogs on or off and reorder them (drag or arrows), or **combine several extensions into one feed**.
 - **Loading screen:** shows artwork, a live source count, *Play now* (at your preferred quality), *Choose source* and *Cancel*.
-- **Your look:** Dark, AMOLED black, Midnight blue and Light themes, seven accent colours or any hex colour, and your own wallpaper behind the app with dim and blur.
+- **Your look:** **Liquid glass**, Dark, AMOLED black, Midnight blue and Light themes, nine one-click presets, any accent colour, and your own wallpaper behind the app with dim and blur. A featured slider on Home and an **anti-spoiler mode** for episodes.
+- **Upkeep:** an update check, new site addresses for extensions whose site moved, and reset options.
 - **Library:** bookmarks (My List), history, per-episode progress, *Resume* and *Continue Watching*.
 - **Network:** DNS-over-HTTPS (Cloudflare, Google, AdGuard, Quad9…) with automatic fallback to system DNS, persistent cookies, IPv4-first, and an HTTP cache.
 - **Developer tools:** per-extension test (home → search → details → sources), a static Linux compatibility check, a log viewer, and storage/cache management.
