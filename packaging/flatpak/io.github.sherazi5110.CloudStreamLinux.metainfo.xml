@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.sherazi5110.CloudStreamLinux</id>
+  <name>CloudStream</name>
+  <summary>Run CloudStream extensions on Linux</summary>
+  <developer id="io.github.sherazi5110">
+    <name>Tennant Creek</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <description>
+    <p>
+      A media center that installs and runs CloudStream extensions from the same
+      repositories the Android app uses, unchanged.
+    </p>
+    <ul>
+      <li>Built-in player using VLC's engine: hardware decoding, source switching, audio languages, speed and zoom</li>
+      <li>Subtitles from extensions, from OpenSubtitles (no account needed) or from files</li>
+      <li>Home catalogs you can hide, reorder and combine across extensions</li>
+      <li>Library with history, resume and Continue Watching</li>
+      <li>Themes, including AMOLED black and light, with custom accent colours and wallpapers</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.sherazi5110.CloudStreamLinux.desktop</launchable>
+  <url type="homepage">https://github.com/sherazi5110/cloudstream-linux</url>
+  <url type="bugtracker">https://github.com/sherazi5110/cloudstream-linux/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/sherazi5110/cloudstream-linux/main/docs/screenshots/home.png</image>
+      <caption>Home</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/sherazi5110/cloudstream-linux/main/docs/screenshots/player.png</image>
+      <caption>Built-in player</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="4.0.0" date="2026-10-27"/>
+  </releases>
+</component>

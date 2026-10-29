@@ -27,8 +27,9 @@ import kotlin.math.roundToInt
 object Vlc {
     val factory: MediaPlayerFactory? by lazy {
         runCatching {
-            // vlcj only looks in the x86 library folders; add ARM ones (e.g. ARM Chromebooks).
-            val dirs = listOf("/usr/lib/aarch64-linux-gnu", "/usr/lib/arm-linux-gnueabihf", "/usr/lib/riscv64-linux-gnu")
+            // vlcj only looks in the system's x86 library folders; add the Flatpak's own
+            // libVLC (/app/lib) and ARM folders (e.g. ARM Chromebooks).
+            val dirs = listOf("/app/lib", "/usr/lib/aarch64-linux-gnu", "/usr/lib/arm-linux-gnueabihf", "/usr/lib/riscv64-linux-gnu")
                 .filter { java.io.File(it, "libvlc.so.5").exists() }
             if (dirs.isNotEmpty()) {
                 val current = System.getProperty("jna.library.path")

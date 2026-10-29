@@ -1,0 +1,103 @@
+# Flatpak build of CloudStream for Linux.
+#
+# The sandbox can't see the system's VLC, so libVLC is built here (engine only, no
+# VLC interface) and the codecs come from the runtime's FFmpeg. The app itself is the
+# self-contained jpackage image (it bundles its own Java), packed by
+# scripts/build-flatpak.sh into build/cloudstream-linux-app.tar.
+#
+#   ./scripts/build-flatpak.sh   ->  build/cloudstream-linux.flatpak
+id: io.github.sherazi5110.CloudStreamLinux
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: cloudstream-linux
+
+finish-args:
+  - --share=network
+  - --share=ipc
+  # JavaFX draws through X11 (XWayland on Wayland desktops).
+  - --socket=x11
+  - --socket=pulseaudio
+  # GPU: OpenGL for the UI, VAAPI for hardware video decoding.
+  - --device=dri
+  # Loading subtitle files and side-loading extensions from Downloads.
+  - --filesystem=xdg-download
+
+add-extensions:
+  # Full FFmpeg (H.264, HEVC, AAC, …), which libVLC decodes with.
+  org.freedesktop.Platform.ffmpeg-full:
+    directory: lib/ffmpeg
+    version: '24.08'
+    add-ld-path: .
+    no-autodownload: false
+    autodelete: false
+
+cleanup-commands:
+  - mkdir -p /app/lib/ffmpeg
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - /share/doc
+  - '*.la'
+  - '*.a'
+
+modules:
+  # Needed by VLC's MPEG-TS demuxer, which HLS streams use.
+  - name: libdvbpsi
+    config-opts:
+      - --disable-static
+    sources:
+      - type: archive
+        url: http://archive.ubuntu.com/ubuntu/pool/universe/libd/libdvbpsi/libdvbpsi_1.3.3.orig.tar.bz2
+        sha256: 02b5998bcf289cdfbd8757bedd5987e681309b0a25b3ffe6cebae599f7a00112
+
+  # libVLC 3 (VideoLAN's release tarball, as mirrored in Ubuntu's archive).
+  - name: vlc
+    build-options:
+      env:
+        # VLC's configure looks for a native compiler named c99/c11 for its build tools;
+        # the Freedesktop SDK only has gcc.
+        BUILDCC: gcc -std=gnu11
+    config-opts:
+      - --disable-static
+      - --disable-vlc          # engine only: no VLC program
+      - --disable-qt           # and no VLC interface
+      - --disable-skins2
+      - --disable-lua          # only used by VLC's own interfaces and scripts
+      - --disable-a52          # AC-3 audio is decoded by FFmpeg instead
+      - --disable-update-check
+      - --disable-nls
+    sources:
+      - type: archive
+        url: http://archive.ubuntu.com/ubuntu/pool/universe/v/vlc/vlc_3.0.24.orig.tar.xz
+        sha256: e7cab503d1d7d5849b89d2cf0e1ee60d0ef6d012407791b644b9cfc0cc225fdf
+    post-install:
+      # Plugin cache: faster startup.
+      - /app/lib/vlc/vlc-cache-gen /app/lib/vlc/plugins
+
+  - name: cloudstream-linux
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/cloudstream-linux /app/bin
+      - cp -a app/. /app/cloudstream-linux/
+      - ln -s /app/cloudstream-linux/bin/cloudstream-linux /app/bin/cloudstream-linux
+      - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/io.github.sherazi5110.CloudStreamLinux.png
+      - install -Dm644 icon.svg /app/share/icons/hicolor/scalable/apps/io.github.sherazi5110.CloudStreamLinux.svg
+      - install -Dm644 io.github.sherazi5110.CloudStreamLinux.desktop -t /app/share/applications
+      - install -Dm644 io.github.sherazi5110.CloudStreamLinux.metainfo.xml -t /app/share/metainfo
+    sources:
+      - type: archive
+        path: ../../build/cloudstream-linux-app.tar
+        dest: app
+      - type: file
+        path: ../linux/cloudstream-linux.png
+        dest-filename: icon.png
+      - type: file
+        path: ../linux/cloudstream-linux.svg
+        dest-filename: icon.svg
+      - type: file
+        path: io.github.sherazi5110.CloudStreamLinux.desktop
+      - type: file
+        path: io.github.sherazi5110.CloudStreamLinux.metainfo.xml
