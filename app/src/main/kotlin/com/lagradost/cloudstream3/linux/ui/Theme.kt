@@ -1,7 +1,5 @@
 package com.lagradost.cloudstream3.linux.ui
 
-import com.lagradost.cloudstream3.linux.Platform
-
 enum class ThemeMode(val label: String) {
     DARK("Dark"),
     AMOLED("AMOLED black"),
@@ -38,14 +36,15 @@ enum class Accent(val label: String, val hex: String) {
  * wallpaper. Applied as CSS looked-up colours on the root, so every page follows live.
  */
 object Theme {
-    private val prefs get() = Platform.context.getSharedPreferences("linux_settings", 0)
+    /** Each profile has its own look. */
+    private val prefs get() = com.lagradost.cloudstream3.linux.Settings.profilePrefs
     private val listeners = mutableListOf<() -> Unit>()
 
     fun onChange(listener: () -> Unit) {
         listeners += listener
     }
 
-    private fun changed() = listeners.forEach { it() }
+    fun changed() = listeners.forEach { it() }
 
     var mode: ThemeMode
         get() = runCatching { ThemeMode.valueOf(prefs.getString("theme_mode", null) ?: "DARK") }.getOrDefault(ThemeMode.DARK)
@@ -53,7 +52,7 @@ object Theme {
 
     /** Accent as #rrggbb; one of [Accent] or a custom colour. */
     var accent: String
-        get() = prefs.getString("theme_accent", null)?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) } ?: Accent.CRIMSON.hex
+        get() = prefs.getString("theme_accent", null)?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) } ?: Accent.OCEAN.hex
         set(v) { prefs.edit().putString("theme_accent", v).apply(); changed() }
 
     /** Optional wallpaper image file behind every page. */

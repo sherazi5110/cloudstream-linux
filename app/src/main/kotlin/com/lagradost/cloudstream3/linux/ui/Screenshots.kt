@@ -22,12 +22,29 @@ object Screenshots {
     suspend fun runIfRequested(window: AppWindow) {
         val prefix = System.getenv("CS_SCREENSHOT") ?: return
         delay(1500)
+        // CS_SCREENSHOT_ONLY=v6: just the profiles / sections / add-on part (quicker while developing).
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "glass") {
+            Theme.mode = ThemeMode.GLASS
+            window.show(Tab.HOME)
+            delay(4000)
+            capture(window, "$prefix-theme-glass.png")
+            Theme.mode = ThemeMode.DARK
+            delay(2500)
+            capture(window, "$prefix-theme-dark.png")
+            System.exit(0)
+        }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "v6") {
+            window.show(Tab.HOME)
+            delay(3000)
+            v6Tour(window, prefix)
+            System.exit(0)
+        }
         for (tab in Tab.entries) {
             window.show(tab)
             delay(if (tab == Tab.HOME) 3000 else 1500)
             capture(window, "$prefix-${tab.name.lowercase()}.png")
         }
-        for (category in listOf("appearance", "playback", "developer", "storage", "shortcuts", "about")) {
+        for (category in listOf("profiles", "appearance", "playback", "developer", "storage", "shortcuts", "about")) {
             window.openSettings(category)
             delay(1200)
             capture(window, "$prefix-settings-$category.png")
@@ -102,10 +119,13 @@ object Screenshots {
                 capture(window, "$prefix-after-player.png")
             }
         }
-        // Home manager: choose extensions and their catalogs.
+        // Home manager: choose extensions and their catalogs (from the source menu in the top bar).
         window.show(Tab.HOME)
         delay(1500)
-        (window.lookup("#home-customize") as? javafx.scene.control.Button)?.fire() ?: System.err.println("tour: no Customize button")
+        (window.lookup("#home-source") as? javafx.scene.control.Button)?.fire() ?: System.err.println("tour: no source button")
+        delay(600)
+        capture(window, "$prefix-source-menu.png")
+        clickPopover(window, "Customize home")
         delay(800)
         capture(window, "$prefix-home-manager.png")
         (window.lookup("#tune-Demo") as? javafx.scene.control.Button)?.fire() ?: System.err.println("tour: no tune button")
@@ -124,6 +144,7 @@ object Screenshots {
             capture(window, "$prefix-home-feed.png")
             com.lagradost.cloudstream3.linux.Catalogs.saveAll(mapOf(demo to before.getValue(demo).sortedBy { it.index }.map { it.copy(enabled = true) }), false, emptyList())
         }
+        v6Tour(window, prefix)
         // "View all" with infinite scrolling: the Demo's Endless catalog has 4 pages of 24.
         Engine.provider("Demo")?.let { demo ->
             val section = demo.mainPage.first { it.data == "paged" }
@@ -139,6 +160,86 @@ object Screenshots {
         }
         delay(500)
         System.exit(0)
+    }
+
+    /** Sections, profiles, the kids profile and a Stremio add-on (v6). */
+    private suspend fun v6Tour(window: AppWindow, prefix: String) {
+        window.showSection(Section.MOVIES)
+        delay(2500)
+        capture(window, "$prefix-section-movies.png")
+        window.showSection(Section.HOME)
+        delay(2000)
+        (window.lookup(".topbar-profile") as? javafx.scene.Node)?.let { javafx.event.Event.fireEvent(it, click()) }
+        delay(600)
+        capture(window, "$prefix-profile-menu.png")
+        window.closeOverlay()
+
+        val me = com.lagradost.cloudstream3.linux.Profiles.current
+        val sara = com.lagradost.cloudstream3.linux.Profiles.add("Sara", "fox:pink", false)
+        com.lagradost.cloudstream3.linux.Profiles.update(sara.copy(pin = "1234"))
+        val kids = com.lagradost.cloudstream3.linux.Profiles.add("Kids", "frog:green", true)
+        com.lagradost.cloudstream3.linux.Profiles.update(kids.copy(filter = kids.filter.copy(extensions = setOf("Demo"))))
+        window.showOverlay(ProfilePicker(startup = false))
+        delay(1200)
+        capture(window, "$prefix-profiles.png")
+        window.showOverlay(ProfilePicker(startup = false, manage = true))
+        delay(800)
+        capture(window, "$prefix-profiles-manage.png")
+        window.showOverlay(ProfileEditor(com.lagradost.cloudstream3.linux.Profiles.all().first { it.id == kids.id }))
+        delay(1200)
+        capture(window, "$prefix-profile-editor.png")
+        (window.lookup(".sheet")?.lookup(".scroll-pane") as? javafx.scene.control.ScrollPane)?.vvalue = 1.0
+        delay(800)
+        capture(window, "$prefix-profile-editor-kids.png")
+        window.closeOverlay(force = true)
+        window.showOverlay(PinPrompt("Enter Sara's PIN") { false })
+        delay(700)
+        capture(window, "$prefix-pin.png")
+        window.closeOverlay(force = true)
+
+        com.lagradost.cloudstream3.linux.Profiles.switchTo(kids.id)
+        delay(4000)
+        capture(window, "$prefix-kids-home.png")
+
+        com.lagradost.cloudstream3.linux.Profiles.switchTo(me.id)
+        delay(2500)
+
+        // A Stremio add-on (the mock one): Extensions tab, then its catalogs on Home and a details page.
+        runCatching { com.lagradost.cloudstream3.linux.StremioAddons.install("http://localhost:8766/addon") }
+            .onFailure { System.err.println("tour: add-on install failed: $it") }
+        window.show(Tab.EXTENSIONS)
+        delay(1200)
+        (window.lookup("#ext-kind") as? javafx.scene.Parent)?.childrenUnmodifiable?.getOrNull(1)?.let { javafx.event.Event.fireEvent(it, click()) }
+        delay(1500)
+        capture(window, "$prefix-addons.png")
+        window.show(Tab.HOME)
+        delay(1500)
+        (window.lookup("#home-source") as? javafx.scene.control.Button)?.fire()
+        delay(600)
+        clickPopover(window, "Test Add-on")
+        delay(5000)
+        capture(window, "$prefix-home-addon.png")
+        com.lagradost.cloudstream3.linux.Engine.provider("Test Add-on")?.let { api ->
+            Nav.open(api.name, "${api.mainUrl}/meta/movie/tst%3Anight_of_the_test_pattern", "Night of the Test Pattern", null)
+            delay(3000)
+            capture(window, "$prefix-addon-details.png")
+            window.back()
+        }
+        com.lagradost.cloudstream3.linux.StremioAddons.all().forEach { com.lagradost.cloudstream3.linux.StremioAddons.remove(it.url) }
+        listOf(sara.id, kids.id).forEach { com.lagradost.cloudstream3.linux.Profiles.delete(it) }
+        Settings.lastHomeProvider = "Demo"
+        delay(1500)
+    }
+
+    private fun click() = javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_CLICKED,
+        0.0, 0.0, 0.0, 0.0, javafx.scene.input.MouseButton.PRIMARY, 1,
+        false, false, false, false, true, false, false, true, false, false, null)
+
+    private fun clickPopover(window: AppWindow, text: String) {
+        val row = window.lookupAll(".popover-row").firstOrNull { r ->
+            (r as javafx.scene.Parent).lookupAll(".popover-text").any { (it as javafx.scene.control.Label).text.startsWith(text) }
+        } ?: return System.err.println("tour: no popover row '$text'")
+        javafx.event.Event.fireEvent(row, click())
     }
 
     /** Clicks the player-menu row whose title starts with [text]. */

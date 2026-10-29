@@ -65,7 +65,11 @@ object Engine {
     private const val DEFAULT_TIMEOUT = 45_000L
 
     /** Sorted by name: extensions load in parallel, so registration order isn't stable. */
-    fun providers(): List<MainAPI> = APIHolder.allProviders.toList()
+    /** Extensions (and Stremio add-ons) the current profile may use: a kids profile sees only its allowed ones. */
+    fun providers(): List<MainAPI> = allProviders().filter { ContentFilter.allows(it) }
+
+    /** Every loaded extension and add-on, whatever the profile. */
+    fun allProviders(): List<MainAPI> = (APIHolder.allProviders.toList() + StremioAddons.apis())
         .onEach { SiteOverrides.apply(it) }
         .sortedBy { it.name.lowercase() }
 
@@ -88,7 +92,8 @@ object Engine {
             Catalogs.enabled(api).forEachIndexed { position, entry ->
                 launch(dispatcher) {
                     val response = homePage(api, entry.section, 1)
-                    response?.items?.filter { it.list.isNotEmpty() }?.forEachIndexed { i, list ->
+                    response?.items?.map { it.copy(list = it.list.filter(ContentFilter::allows)) }
+                        ?.filter { it.list.isNotEmpty() }?.forEachIndexed { i, list ->
                         send(HomeSection(p * 1_000_000 + position * 100 + i, api, entry.section, list))
                     }
                 }
@@ -112,7 +117,7 @@ object Engine {
         apis.forEach { api ->
             launch(dispatcher) {
                 val batch = try {
-                    val results = withTimeout(api.searchTimeoutMs ?: DEFAULT_TIMEOUT) { api.search(query, 1)?.items.orEmpty() }
+                    val results = withTimeout(api.searchTimeoutMs ?: DEFAULT_TIMEOUT) { api.search(query, 1)?.items.orEmpty() }.filter(ContentFilter::allows)
                     SearchBatch(api, results, null)
                 } catch (t: Throwable) {
                     log(api, "search", t)

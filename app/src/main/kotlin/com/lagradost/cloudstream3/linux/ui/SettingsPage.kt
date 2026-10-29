@@ -4,9 +4,11 @@ import com.lagradost.cloudstream3.linux.AppDirs
 import com.lagradost.cloudstream3.linux.CompatChecker
 import com.lagradost.cloudstream3.linux.DnsProvider
 import com.lagradost.cloudstream3.linux.Engine
+import com.lagradost.cloudstream3.linux.StremioApi
 import com.lagradost.cloudstream3.linux.Logs
 import com.lagradost.cloudstream3.linux.Network
 import com.lagradost.cloudstream3.linux.PluginManager
+import com.lagradost.cloudstream3.linux.Profiles
 import com.lagradost.cloudstream3.linux.ProviderTest
 import com.lagradost.cloudstream3.linux.RepositoryManager
 import com.lagradost.cloudstream3.linux.Settings
@@ -40,6 +42,7 @@ class SettingsPage : StackPane(), Refreshable {
     private data class Category(val id: String, val title: String, val icon: String, val build: () -> List<Node>)
 
     private val categories = listOf(
+        Category("profiles", "Profiles", Icons.PEOPLE, ::profiles),
         Category("appearance", "Appearance", Icons.PALETTE, ::appearance),
         Category("playback", "Playback", Icons.PLAY_CIRCLE, ::playback),
         Category("network", "Network & DNS", Icons.NETWORK, ::network),
@@ -156,6 +159,27 @@ class SettingsPage : StackPane(), Refreshable {
     }
 
     // ---------- categories ----------
+
+    private fun profiles(): List<Node> {
+        val list = VBox(4.0).apply {
+            children.setAll(Profiles.all().map { p ->
+                hbox(14.0, Avatars.node(p.avatar, 40.0, round = true), vbox(2.0, label(p.name, "bold"),
+                    label(listOfNotNull(if (p.kids) "Kids profile · ${p.filter.extensions.size} extensions allowed" else "Profile",
+                        if (p.pin != null) "PIN" else null, if (p.id == Profiles.current.id) "you are here" else null).joinToString(" · "), "faint", "small")),
+                ).apply { styleClass += "card-row" }
+            })
+        }
+        return listOf(
+            section("Profiles", list, row("Manage profiles", "Add, edit or delete profiles; set avatars, PINs and kids profiles.",
+                button("Manage profiles", Icons.PEOPLE, "btn-ghost") { Nav.window.showOverlay(ProfilePicker(startup = false, manage = true)) })),
+            section("Startup",
+                row("Ask who's watching", "With more than one profile, show the profile picker when the app starts. It always shows when the last profile has a PIN.",
+                    Switch(Profiles.askOnStart) { Profiles.askOnStart = it })),
+            section("What belongs to a profile", label(
+                "Each profile has its own history, continue watching, list, home layout, theme and player preferences (subtitles, audio, volume). " +
+                    "Extensions, Stremio add-ons, network and storage settings are shared by everyone.", "muted").apply { isWrapText = true; pad(10.0, 0.0) }),
+        )
+    }
 
     private fun appearance(): List<Node> {
         val presets = FlowPane(10.0, 10.0).apply {
@@ -381,7 +405,7 @@ class SettingsPage : StackPane(), Refreshable {
 
     /** Point an extension at a new domain when its site moves (until the extension is updated). */
     private fun siteAddresses(): Node {
-        val apis = Engine.providers().filter { it.mainUrl.startsWith("http") }
+        val apis = Engine.allProviders().filter { it.mainUrl.startsWith("http") && it !is StremioApi }
         val rows = apis.map { api ->
             val original = SiteOverrides.original(api)
             val field = TextField(SiteOverrides.get(api) ?: "").apply { promptText = original; prefWidth = 300.0 }
@@ -430,7 +454,7 @@ class SettingsPage : StackPane(), Refreshable {
             return vbox(6.0, hbox(12.0, label(api.name, "bold"), label(api.mainUrl, "faint", "small"), spacer(), state, runButton), steps)
                 .apply { styleClass += "card-row" }
         }
-        Engine.providers().forEach { tests.children += testRow(it) }
+        Engine.allProviders().forEach { tests.children += testRow(it) }
         if (tests.children.isEmpty()) tests.children += label("No extensions loaded.", "muted").pad(12.0)
 
         val compat = VBox(6.0)
@@ -514,10 +538,10 @@ class SettingsPage : StackPane(), Refreshable {
                 row("App data", AppDirs.data.absolutePath, button("Open", Icons.FOLDER, "btn-ghost", "btn-small") { openFolder(AppDirs.data) }),
             ),
             section("Reset",
-                row("Reset settings", "Theme, player, network, home and site-address settings go back to defaults. Extensions, repositories, library and history are kept.",
+                row("Reset settings", "App settings and this profile's theme, player and home settings go back to defaults. Extensions, repositories, profiles, library and history are kept.",
                     button("Reset settings", Icons.REFRESH, "btn-ghost", "btn-small") {
                         if (!confirm("Reset all settings to their defaults?")) return@button
-                        listOf("linux_settings", "home_catalogs", "site_overrides").forEach {
+                        listOf("linux_settings", Profiles.file("home_catalogs"), Profiles.file("profile_settings"), "site_overrides").forEach {
                             com.lagradost.cloudstream3.linux.Platform.context.getSharedPreferences(it, 0).edit().clear().apply()
                         }
                         Theme.mode = Theme.mode // re-applies the (default) theme

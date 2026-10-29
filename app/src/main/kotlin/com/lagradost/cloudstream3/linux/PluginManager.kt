@@ -61,6 +61,9 @@ object PluginManager {
         _version.value++
     }
 
+    /** For other provider sources (Stremio add-ons, profile switches) to refresh screens too. */
+    fun bumpVersion() = changed()
+
     /** register* calls in Plugin.load mutate global lists; translation and class loading stay parallel. */
     private val registerLock = Any()
 

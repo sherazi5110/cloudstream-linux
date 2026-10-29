@@ -36,7 +36,7 @@ data class Progress(val position: Double, val duration: Double)
 
 /** History, per-episode progress and bookmarks, persisted as JSON in the app data dir. */
 object Library {
-    private val prefs get() = Platform.context.getSharedPreferences("library", 0)
+    private val prefs get() = Platform.context.getSharedPreferences(Profiles.file("library"), 0)
 
     private val listeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
 

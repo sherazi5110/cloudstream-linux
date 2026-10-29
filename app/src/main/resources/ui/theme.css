@@ -25,6 +25,7 @@
     -cs-bad: #ff4d5e;
 
     -fx-background-color: -cs-bg;
+    -fx-font-family: "Inter", "System";
     -fx-font-size: 13px;
     -fx-text-fill: -cs-text;
     -fx-focus-color: -cs-accent;
@@ -327,7 +328,7 @@
 .ext-card:hover { -fx-border-color: -cs-accent-glow; }
 
 /* ---------- inputs ---------- */
-.text-field, .search-field, .text-area {
+.text-field, .search-field, .text-area, .password-field {
     -fx-background-color: -cs-surface;
     -fx-background-radius: 12;
     -fx-border-color: -cs-line;
@@ -555,3 +556,156 @@
     -fx-border-color: -cs-line; -fx-border-radius: 7; -fx-border-width: 1 1 2 1;
     -fx-padding: 4 10 4 10; -fx-font-family: "monospace"; -fx-font-size: 12px; -fx-text-fill: -cs-text;
 }
+
+/* ================= v6 shell: icon rail, top bar, popovers ================= */
+.rail {
+    -fx-background-color: -cs-rail;
+    -fx-border-color: transparent -cs-line transparent transparent;
+    -fx-padding: 16 0 16 0;
+    -fx-min-width: 76; -fx-pref-width: 76; -fx-max-width: 76;
+}
+.rail-item {
+    -fx-min-width: 46; -fx-min-height: 46; -fx-max-width: 46; -fx-max-height: 46;
+    -fx-background-radius: 14;
+    -fx-cursor: hand;
+}
+.rail-item .icon { -fx-background-color: -cs-faint; }
+.rail-item:hover { -fx-background-color: -cs-chip; }
+.rail-item:hover .icon { -fx-background-color: -cs-text; }
+.rail-item.active { -fx-background-color: -cs-accent-soft; }
+.rail-item.active .icon { -fx-background-color: -cs-accent; }
+.rail-logo { -fx-cursor: hand; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 10, 0.1, 0, 3); }
+.rail-avatar { -fx-cursor: hand; -fx-padding: 10 0 0 0; }
+.rail-avatar:hover { -fx-opacity: 0.85; }
+
+.topbar {
+    -fx-background-color: linear-gradient(to bottom, -cs-bg-60 0%, -cs-bg-0 100%);
+}
+.topbar.solid {
+    -fx-background-color: -cs-bg-96;
+    -fx-border-color: transparent transparent -cs-line transparent;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 16, 0, 0, 4);
+}
+.topnav-item {
+    -fx-text-fill: -cs-muted;
+    -fx-font-size: 14.5px;
+    -fx-font-weight: bold;
+    -fx-padding: 8 13 8 13;
+    -fx-cursor: hand;
+    -fx-background-radius: 10;
+}
+.topnav-item:hover { -fx-text-fill: -cs-text; }
+.topnav-item.active { -fx-text-fill: -cs-text; -fx-border-color: transparent transparent -cs-accent transparent; -fx-border-width: 0 0 2.5 0; -fx-border-insets: 0 13 0 13; }
+.topbar-search {
+    -fx-background-color: -cs-chip;
+    -fx-background-radius: 999;
+    -fx-border-color: -cs-line; -fx-border-radius: 999;
+    -fx-text-fill: -cs-muted;
+    -fx-padding: 9 22 9 16;
+    -fx-cursor: hand;
+    -fx-graphic-text-gap: 9;
+    -fx-font-weight: bold;
+}
+.topbar-search .icon { -fx-background-color: -cs-muted; }
+.topbar-search:hover { -fx-background-color: -cs-surface-3; -fx-text-fill: -cs-text; }
+.topbar-source {
+    -fx-background-color: transparent;
+    -fx-text-fill: -cs-text;
+    -fx-font-weight: bold;
+    -fx-padding: 9 12 9 14;
+    -fx-background-radius: 999;
+    -fx-border-color: -cs-line; -fx-border-radius: 999;
+    -fx-cursor: hand;
+    -fx-graphic-text-gap: 6;
+}
+.topbar-source .icon { -fx-background-color: -cs-muted; }
+.topbar-source:hover { -fx-background-color: -cs-chip; }
+.topbar-profile { -fx-cursor: hand; -fx-padding: 4 10 4 4; -fx-background-radius: 999; }
+.topbar-profile:hover { -fx-background-color: -cs-chip; }
+.topbar-profile .icon { -fx-background-color: -cs-muted; }
+.topbar-name { -fx-font-weight: bold; -fx-font-size: 13.5px; }
+
+.popover-layer { -fx-background-color: transparent; }
+.popover {
+    -fx-background-color: -cs-surface;
+    -fx-background-radius: 16;
+    -fx-border-color: -cs-line; -fx-border-radius: 16;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 30, 0.1, 0, 10);
+}
+.popover-row { -fx-padding: 8 12 8 10; -fx-background-radius: 10; -fx-cursor: hand; -fx-min-height: 40; }
+.popover-row:hover { -fx-background-color: -cs-chip; }
+.popover-row.selected { -fx-background-color: -cs-accent-soft; }
+.popover-row.selected .popover-text { -fx-text-fill: -cs-accent; }
+.popover-row .icon { -fx-background-color: -cs-muted; }
+.popover-text { -fx-font-weight: bold; -fx-font-size: 13px; }
+.popover-separator { -fx-background-color: -cs-line; -fx-min-height: 1; -fx-max-height: 1; -fx-padding: 0; }
+.small-badge { -fx-min-width: 28; -fx-min-height: 28; -fx-max-width: 28; -fx-max-height: 28; -fx-font-size: 10.5px; }
+
+/* ---------- full-width home banner ---------- */
+.hero-full { -fx-background-color: -cs-bg; }
+.hero-shade-left { -fx-background-color: linear-gradient(to right, -cs-bg-96 0%, -cs-bg-85 22%, -cs-bg-0 62%); }
+.hero-shade-bottom { -fx-background-color: linear-gradient(to bottom, -cs-bg-0 52%, -cs-bg-85 84%, -cs-bg 100%); }
+.hero-shade-top { -fx-background-color: linear-gradient(to bottom, -cs-bg-60 0%, -cs-bg-0 22%); }
+.hero-source { -fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: -cs-text; }
+.hero-big-title {
+    -fx-font-family: "Inter Display ExtraBold", "Inter Display", "Inter";
+    -fx-font-weight: 800;
+    -fx-font-size: 58px;
+    -fx-text-fill: -cs-text;
+    -fx-line-spacing: -10;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.35), 18, 0, 0, 2);
+}
+.hero-meta-item { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -cs-text; }
+.hero-rating {
+    -fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: -cs-text;
+    -fx-border-color: -cs-muted; -fx-border-radius: 999; -fx-padding: 2 10 2 10;
+}
+.hero-rank { -fx-font-size: 19px; -fx-font-weight: bold; -fx-text-fill: -cs-text; }
+.hero-plot { -fx-font-size: 14.5px; -fx-text-fill: -cs-muted; -fx-line-spacing: 4; }
+.hero-play, .hero-info {
+    -fx-background-radius: 999;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-padding: 12 28 12 22;
+    -fx-cursor: hand;
+    -fx-graphic-text-gap: 10;
+}
+.hero-play { -fx-background-color: -cs-accent; -fx-text-fill: white; -fx-effect: dropshadow(gaussian, -cs-accent-glow, 22, 0.15, 0, 4); }
+.hero-play .icon { -fx-background-color: white; }
+.hero-play:hover { -fx-background-color: -cs-accent-hover; }
+.hero-info { -fx-background-color: rgba(120,120,135,0.42); -fx-text-fill: white; }
+.hero-info .icon { -fx-background-color: white; }
+.hero-info:hover { -fx-background-color: rgba(140,140,155,0.6); }
+
+/* ---------- profiles ---------- */
+.profile-picker { -fx-background-color: radial-gradient(center 50% 30%, radius 70%, derive(-cs-accent, -72%) 0%, -cs-bg 70%); }
+.picker-title { -fx-font-family: "Inter Display ExtraBold", "Inter"; -fx-font-weight: 800; -fx-font-size: 40px; }
+.picker-tile { -fx-cursor: hand; -fx-min-width: 150; -fx-max-width: 150; }
+.picker-avatar { -fx-background-radius: 24; -fx-border-color: transparent; -fx-border-width: 3; -fx-border-radius: 26; -fx-padding: 3; }
+.picker-tile:hover .picker-avatar { -fx-border-color: -cs-text; }
+.picker-tile.current .picker-avatar { -fx-border-color: -cs-accent; }
+.picker-name { -fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: -cs-muted; }
+.picker-tile:hover .picker-name { -fx-text-fill: -cs-text; }
+.picker-kids { -fx-font-size: 10.5px; -fx-font-weight: bold; -fx-text-fill: white; -fx-background-color: -cs-accent; -fx-background-radius: 999; -fx-padding: 2 9 2 9; }
+.picker-edit { -fx-background-color: rgba(0,0,0,0.55); -fx-background-radius: 22; }
+.picker-edit .icon { -fx-background-color: white; }
+.picker-lock { -fx-background-color: rgba(0,0,0,0.65); -fx-background-radius: 999; }
+.picker-lock .icon { -fx-background-color: white; }
+.picker-add { -fx-background-color: -cs-chip; -fx-background-radius: 24; -fx-border-color: -cs-line; -fx-border-radius: 24; -fx-border-width: 2; }
+.picker-add .icon { -fx-background-color: -cs-muted; }
+.picker-tile:hover .picker-add .icon { -fx-background-color: -cs-text; }
+.pin-field { -fx-font-size: 26px; -fx-alignment: center; -fx-pref-height: 54; }
+.avatar-choice { -fx-cursor: hand; -fx-border-color: transparent; -fx-border-width: 3; -fx-border-radius: 16; -fx-padding: 2; }
+.avatar-choice:hover { -fx-border-color: -cs-line; }
+.avatar-choice.selected { -fx-border-color: -cs-accent; }
+.color-dot { -fx-min-width: 30; -fx-min-height: 30; -fx-max-width: 30; -fx-max-height: 30; -fx-background-radius: 999; -fx-cursor: hand; -fx-border-color: transparent; -fx-border-width: 3; -fx-border-radius: 999; }
+.color-dot.selected { -fx-border-color: -cs-text; }
+
+/* ---------- Stremio add-ons ---------- */
+.addon-logo { -fx-background-color: -cs-surface-3; -fx-background-radius: 12; }
+
+/* glass versions */
+.glass .rail { -fx-background-color: rgba(255,255,255,0.06); -fx-border-color: transparent rgba(255,255,255,0.12) transparent transparent; }
+.glass .topbar.solid { -fx-background-color: rgba(18,12,40,0.78); -fx-border-color: transparent transparent rgba(255,255,255,0.14) transparent; }
+.glass .popover { -fx-background-color: linear-gradient(to bottom, rgba(44,36,88,0.95), rgba(22,16,48,0.96)); -fx-border-color: rgba(255,255,255,0.22); }
+.glass .hero-full { -fx-background-color: transparent; }

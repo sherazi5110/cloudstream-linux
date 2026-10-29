@@ -14,13 +14,36 @@ enum class DnsProvider(val label: String, val url: String?, val ips: List<String
     CANADIAN_SHIELD("Canadian Shield", "https://private.canadianshield.cira.ca/dns-query", listOf("149.112.121.10", "149.112.122.10")),
 }
 
-/** App settings (separate from the key store extensions use). */
+/**
+ * App settings (separate from the key store extensions use). App-wide ones live in
+ * "linux_settings"; the look and player preferences belong to the current [Profiles] profile.
+ */
 object Settings {
     private val prefs: SharedPreferences get() = Platform.context.getSharedPreferences("linux_settings", 0)
 
-    private fun string(key: String, def: String) = prefs.getString(key, null) ?: def
+    /** The current profile's preferences (theme, player, home). */
+    val profilePrefs: SharedPreferences get() = Platform.context.getSharedPreferences(Profiles.file("profile_settings"), 0)
+
+    private val PROFILE_KEYS = setOf(
+        "auto_play_next", "subtitle_language", "preferred_quality", "player_volume", "hero_slider", "anti_spoiler",
+        "player_equalizer", "audio_language", "subtitle_size", "subtitle_color", "subtitle_outline", "subtitle_background",
+        "player_zoom", "last_home_provider", "home_section",
+        "theme_mode", "theme_accent", "theme_wallpaper", "theme_wallpaper_dim", "theme_wallpaper_blur",
+    )
+
+    private fun store(key: String) = if (key in PROFILE_KEYS) profilePrefs else prefs
+    private fun string(key: String, def: String) = store(key).getString(key, null) ?: def
     private fun put(key: String, value: Any) {
-        prefs.edit().putString(key, value.toString()).apply()
+        store(key).edit().putString(key, value.toString()).apply()
+    }
+
+    /** Before profiles (v5 and older) these were app-wide: they become the first profile's. */
+    fun migrateToProfiles() {
+        if (prefs.contains("profiles_migrated")) return
+        val target = Platform.context.getSharedPreferences("profile_settings", 0).edit()
+        prefs.getAll().forEach { (k, v) -> if (k in PROFILE_KEYS && v is String) target.putString(k, v) }
+        target.apply()
+        prefs.edit().putString("profiles_migrated", "true").apply()
     }
 
     /** Lower-power playback for low-end PCs and battery: skip H.264 deblocking, buffer more. */
@@ -115,6 +138,11 @@ object Settings {
         set(v) = put("player_zoom", v)
 
     var lastHomeProvider: String?
-        get() = prefs.getString("last_home_provider", null)
+        get() = string("last_home_provider", "").ifBlank { null }
         set(v) = put("last_home_provider", v ?: "")
+
+    /** The Home section last picked in the top bar (a [com.lagradost.cloudstream3.linux.ui.Section] name). */
+    var homeSection: String
+        get() = string("home_section", "HOME")
+        set(v) = put("home_section", v)
 }

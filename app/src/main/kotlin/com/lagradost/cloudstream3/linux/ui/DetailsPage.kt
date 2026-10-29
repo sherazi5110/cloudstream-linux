@@ -65,6 +65,11 @@ class DetailsPage(
         job = ui.launch {
             try {
                 val r = Engine.load(api, url) ?: error("${api.name} returned nothing for this title")
+                if (blockedForKids(r)) {
+                    content.children.setAll(topBar(), emptyState(Icons.LOCK, "Not available in this profile",
+                        "This title is hidden by the kids profile's content filter."))
+                    return@launch
+                }
                 response = r
                 playables = Engine.playables(r)
                 val last = Library.lastWatched(api.name, url)
@@ -166,16 +171,7 @@ class DetailsPage(
         content.children.setAll(nodes)
     }
 
-    /** The episode Play should start: resume the last one, else the next unwatched, else the first. */
-    private fun target(): Playable? {
-        val last = Library.lastWatched(api.name, url)
-        val index = playables.indexOfFirst { it.data == last?.episodeData }
-        return when {
-            index < 0 -> playables.firstOrNull()
-            last!!.finished -> playables.getOrNull(index + 1) ?: playables[index]
-            else -> playables[index]
-        }
-    }
+    private fun target(): Playable? = playTarget(api.name, url, playables)
 
     private fun playButton(): Node {
         val target = target()
@@ -268,4 +264,15 @@ fun shortCode(p: Playable): String =
 fun clock(seconds: Double): String {
     val s = seconds.toLong()
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s % 3600 / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** The episode Play should start: resume the last one, else the next unwatched, else the first. */
+fun playTarget(apiName: String, url: String, playables: List<Playable>): Playable? {
+    val last = Library.lastWatched(apiName, url)
+    val index = playables.indexOfFirst { it.data == last?.episodeData }
+    return when {
+        index < 0 -> playables.firstOrNull()
+        last!!.finished -> playables.getOrNull(index + 1) ?: playables[index]
+        else -> playables[index]
+    }
 }
