@@ -135,8 +135,17 @@ class StremioProfilesTest {
         film.contentRating = "R"
         assertFalse(ContentFilter.allows(film))
 
+        // Leaving kids mode needs the parent PIN (or the grown-up profile's own PIN) once one is set.
+        assertEquals(null, Profiles.unlockFor(adult), "no parent PIN yet: nothing to ask")
+        Profiles.setParentPin("4321")
+        val unlock = Profiles.unlockFor(adult)!!
+        assertFalse(unlock("0000"))
+        assertTrue(unlock("4321"))
+        Profiles.setParentPin(null)
+
         Profiles.switchTo(adult.id)
         assertFalse(Profiles.isKids)
+        assertEquals(null, Profiles.unlockFor(Profiles.all().first { it.id == kids.id }), "going to a kids profile is free")
         assertEquals(listOf("Pixel City"), Library.history().map { it.name })
         assertTrue(ContentFilter.allows(horror))
         Library.removeHistory(entry.apiName, entry.url)

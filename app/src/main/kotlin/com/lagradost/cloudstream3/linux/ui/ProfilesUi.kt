@@ -20,18 +20,37 @@ import javafx.stage.FileChooser
 
 /** Switching profile, asking for the target's PIN first when it has one. */
 object ProfileSwitch {
-    /** At startup even the last-used profile asks for its PIN; Cancel goes back to the picker. */
+    /**
+     * Switches profile, asking for a PIN when needed: the target's own PIN, and when leaving a
+     * kids profile the parent PIN (or the target's PIN). At startup even the last-used profile
+     * asks for its PIN; Cancel goes back to the picker.
+     */
     fun to(target: Profile, startup: Boolean = false) {
         if (target.id == Profiles.current.id && !startup) return
-        val pin = target.pin
-        if (pin == null) {
+        val check: ((String) -> Boolean)? = if (startup && target.id == Profiles.current.id) target.pin?.let { own -> { p: String -> p == own || Profiles.checkParentPin(p) } }
+            else Profiles.unlockFor(target)
+        if (check == null) {
             if (target.id != Profiles.current.id) Profiles.switchTo(target.id)
             return
         }
-        Nav.window.showOverlay(PinPrompt("Enter ${target.name}'s PIN",
+        val title = if (Profiles.current.kids && !target.kids && target.pin == null) "Enter the parent PIN" else "Enter ${target.name}'s PIN"
+        Nav.window.showOverlay(PinPrompt(title,
             onCancel = if (startup) ({ Nav.window.showOverlay(ProfilePicker(startup = true)) }) else null) { entered ->
-            (entered == pin).also { if (it && target.id != Profiles.current.id) Profiles.switchTo(target.id) }
+            check(entered).also { if (it && target.id != Profiles.current.id) Profiles.switchTo(target.id) }
         })
+    }
+
+    /**
+     * Leaves the kids profile: to the first grown-up profile, or, if every profile is a kids
+     * profile (possible before 6.0.1), turns this one back into a grown-up profile. Needs the parent PIN.
+     */
+    fun exitKids() {
+        val adult = Profiles.all().firstOrNull { !it.kids }
+        if (adult != null) return to(adult)
+        val me = Profiles.current
+        val done = { Profiles.update(me.copy(kids = false)); Toasts.show("${me.name} is a grown-up profile again. Make a separate profile for kids.", seconds = 8.0) }
+        if (!Profiles.hasParentPin) done()
+        else Nav.window.showOverlay(PinPrompt("Enter the parent PIN") { p -> Profiles.checkParentPin(p).also { if (it) done() } })
     }
 }
 
@@ -49,6 +68,7 @@ object ProfileMenu {
             rows += Popover.row(icon(Icons.PEOPLE, 18.0), "Manage profiles") { Nav.window.showOverlay(ProfilePicker(startup = false, manage = true)) }
             rows += Popover.row(icon(Icons.SETTINGS, 18.0), "Settings") { Nav.window.show(Tab.SETTINGS) }
         } else {
+            rows += Popover.row(icon(Icons.LOCK, 18.0), "Exit kids profile", "parent PIN") { ProfileSwitch.exitKids() }
             rows += Popover.row(icon(Icons.PEOPLE, 18.0), "Who's watching?") { Nav.window.showOverlay(ProfilePicker(startup = false)) }
         }
         Popover.show(anchor, Popover.panel(*rows.toTypedArray()))
@@ -60,7 +80,9 @@ class ProfilePicker(private val startup: Boolean, private var manage: Boolean = 
     override val blocking get() = startup
     private val grid = FlowPane(28.0, 28.0).apply { alignment = Pos.CENTER; maxWidth = 980.0 }
     private val title = label("", "picker-title")
-    private val manageButton = button("", Icons.EDIT, "btn-ghost") { manage = !manage; render() }
+    private val manageButton = button("", Icons.EDIT, "btn-ghost") {
+        if (Profiles.isKids) { Nav.window.closeOverlay(force = true); ProfileSwitch.exitKids() } else { manage = !manage; render() }
+    }
 
     init {
         styleClass += "profile-picker"
@@ -79,7 +101,9 @@ class ProfilePicker(private val startup: Boolean, private var manage: Boolean = 
         val kids = Profiles.isKids
         title.text = if (manage) "Manage profiles" else "Who's watching?"
         manageButton.text = if (manage) "Done" else "Manage profiles"
-        manageButton.isVisible = !kids
+        manageButton.isVisible = true
+        manageButton.text = if (kids) "Exit kids profile" else manageButton.text
+        manageButton.graphic = icon(if (kids) Icons.LOCK else Icons.EDIT, 18.0)
         val tiles = Profiles.all().map { p -> tile(p) }.toMutableList()
         if (!kids && Profiles.all().size < 8) tiles += addTile()
         grid.children.setAll(tiles)
@@ -187,6 +211,10 @@ class ProfileEditor(private val existing: Profile?) : StackPane() {
         textProperty().addListener { _, old, new -> if (new.length > 4 || new.any { !it.isDigit() }) text = old }
     }
     private var removePin = false
+    private val parentPin = PasswordField().apply { promptText = "New parent PIN (4 digits)"; styleClass += "text-input"; maxWidth = 220.0
+        textProperty().addListener { _, old, new -> if (new.length > 4 || new.any { !it.isDigit() }) text = old } }
+    private val parentPin2 = PasswordField().apply { promptText = "Repeat it"; styleClass += "text-input"; maxWidth = 220.0
+        textProperty().addListener { _, old, new -> if (new.length > 4 || new.any { !it.isDigit() }) text = old } }
     private val words = TextArea(filter.blockedWords.joinToString(", ")).apply { isWrapText = true; prefRowCount = 2; styleClass += "text-input" }
     private val error = label("", "error-text")
 
@@ -265,6 +293,9 @@ class ProfileEditor(private val existing: Profile?) : StackPane() {
         kidsBox.isVisible = kids
         kidsBox.isManaged = kids
         if (!kids) return
+        val parent = if (Profiles.hasParentPin) null else vbox(8.0, label("Parent PIN", "bold"),
+            label("Needed to leave a kids profile (and to switch to grown-up profiles without their own PIN). You'll need it later, so pick one you remember.", "faint", "small").apply { isWrapText = true },
+            hbox(10.0, parentPin, parentPin2)).apply { styleClass += "card"; pad(12.0, 14.0) }
         val apis = Engine.allProviders().filter { TvType.NSFW !in it.supportedTypes }
         val extensionChecks = FlowPane(10.0, 10.0).apply {
             children.setAll(apis.map { api ->
@@ -293,20 +324,33 @@ class ProfileEditor(private val existing: Profile?) : StackPane() {
         val ageChips = ChipGroup { i -> filter = filter.copy(maxAge = ages[i].first) }.apply {
             setItems(ages.map { it.second }, ages.indexOfFirst { it.first == filter.maxAge }.coerceAtLeast(0))
         }
-        kidsBox.children.setAll(
+        kidsBox.children.setAll(listOfNotNull(parent,
             vbox(8.0, label("Allowed extensions", "bold"),
                 label(if (apis.isEmpty()) "No extensions installed yet." else "The kids profile only sees these. Extensions marked NSFW are never shown.", "faint", "small"),
                 extensionChecks),
             vbox(8.0, label("Allowed types", "bold"), types),
             vbox(8.0, label("Highest age rating", "bold"), label("Titles rated above this are hidden when the extension provides a rating.", "faint", "small"), ageChips),
             vbox(8.0, label("Blocked words", "bold"), label("Titles, genres or descriptions containing these are hidden. Separate with commas.", "faint", "small"), words),
-        )
+        ))
+    }
+
+    private fun scrollToTop() {
+        (lookup(".scroll-pane") as? javafx.scene.control.ScrollPane)?.vvalue = 0.0
     }
 
     private fun save() {
         val n = name.text.trim()
         if (n.isBlank()) { error.text = "Enter a name"; return }
         if (pin.text.isNotEmpty() && pin.text.length != 4) { error.text = "The PIN needs 4 digits"; return }
+        if (kids) {
+            val adultsLeft = Profiles.all().count { !it.kids && it.id != existing?.id }
+            if (adultsLeft == 0) { error.text = "Keep at least one grown-up profile: add a new profile for the kids instead"; scrollToTop(); return }
+            if (!Profiles.hasParentPin) {
+                if (parentPin.text.length != 4) { error.text = "Create a 4-digit parent PIN (in the kids settings below)"; scrollToTop(); return }
+                if (parentPin.text != parentPin2.text) { error.text = "The two parent PINs don't match"; scrollToTop(); return }
+                Profiles.setParentPin(parentPin.text)
+            }
+        }
         val blocked = words.text.split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() }
         val newPin = when {
             pin.text.length == 4 -> pin.text

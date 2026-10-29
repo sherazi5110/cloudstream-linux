@@ -184,6 +184,10 @@ class SettingsPage : StackPane(), Refreshable {
         return listOf(
             section("Profiles", list, row("Manage profiles", "Add, edit or delete profiles; set avatars, PINs and kids profiles.",
                 button("Manage profiles", Icons.PEOPLE, "btn-ghost") { Nav.window.showOverlay(ProfilePicker(startup = false, manage = true)) })),
+            section("Kids",
+                row("Parent PIN", if (Profiles.hasParentPin) "Needed to leave a kids profile. Change it here (you'll need the current one)."
+                    else "Not set yet. It's created when you make a kids profile, or set one now.",
+                    button(if (Profiles.hasParentPin) "Change PIN" else "Set PIN", Icons.LOCK, "btn-ghost", "btn-small") { changeParentPin() })),
             section("Startup",
                 row("Ask who's watching", "With more than one profile, show the profile picker when the app starts. It always shows when the last profile has a PIN.",
                     Switch(Profiles.askOnStart) { Profiles.askOnStart = it })),
@@ -191,6 +195,21 @@ class SettingsPage : StackPane(), Refreshable {
                 "Each profile has its own history, continue watching, list, home layout, theme and player preferences (subtitles, audio, volume). " +
                     "Extensions, Stremio add-ons, network and storage settings are shared by everyone.", "muted").apply { isWrapText = true; pad(10.0, 0.0) }),
         )
+    }
+
+    /** Current PIN (if any) → new PIN → repeat, each in the PIN pad. */
+    private fun changeParentPin() {
+        fun askNew() = Nav.window.showOverlay(PinPrompt("New parent PIN") { first ->
+            javafx.application.Platform.runLater {
+                Nav.window.showOverlay(PinPrompt("Repeat the new PIN") { again ->
+                    (again == first).also { ok -> if (ok) { Profiles.setParentPin(first); Toasts.show("Parent PIN saved"); open("profiles") } }
+                })
+            }
+            true
+        })
+        if (Profiles.hasParentPin) Nav.window.showOverlay(PinPrompt("Current parent PIN") { p ->
+            Profiles.checkParentPin(p).also { if (it) javafx.application.Platform.runLater { askNew() } }
+        }) else askNew()
     }
 
     private fun appearance(): List<Node> {

@@ -33,6 +33,27 @@ object Screenshots {
             capture(window, "$prefix-theme-dark.png")
             System.exit(0)
         }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "kids") {
+            // The only profile set to kids, before parent PINs existed: the way out.
+            val me = com.lagradost.cloudstream3.linux.Profiles.current
+            com.lagradost.cloudstream3.linux.Profiles.update(me.copy(kids = true, filter = me.filter.copy(extensions = setOf("Demo"))))
+            delay(3000)
+            (window.lookup(".topbar-profile") as? javafx.scene.Node)?.let { javafx.event.Event.fireEvent(it, click()) }
+            delay(700)
+            capture(window, "$prefix-kids-menu.png")
+            clickPopover(window, "Exit kids profile")
+            delay(2500)
+            capture(window, "$prefix-kids-exited.png")
+            // Making a kids profile now asks for a parent PIN.
+            window.showOverlay(ProfileEditor(null))
+            delay(800)
+            window.lookupAll(".switch").lastOrNull()?.let { javafx.event.Event.fireEvent(it, click()) }
+            delay(800)
+            (window.lookup(".sheet")?.lookup(".scroll-pane") as? javafx.scene.control.ScrollPane)?.vvalue = 0.62
+            delay(700)
+            capture(window, "$prefix-kids-parent-pin.png")
+            System.exit(0)
+        }
         if (System.getenv("CS_SCREENSHOT_ONLY") == "v601") {
             v601Tour(window, prefix)
             System.exit(0)
