@@ -155,7 +155,12 @@ class WideCard(title: String, subtitle: String?, imageUrl: String?, progress: Do
  */
 class Shelf(title: String, private val onViewAll: (() -> Unit)? = null, trailing: Node? = null) : VBox(12.0) {
     val row = HBox(14.0).apply { alignment = Pos.TOP_LEFT }
-    private val viewport = Pane(row)
+    // The viewport is as tall as its row (measured, not bound: a binding lags one layout pass,
+    // which left rows squashed when their cards arrived after the first layout).
+    private val viewport = object : Pane(row) {
+        override fun computeMinHeight(width: Double) = row.prefHeight(-1.0)
+        override fun computePrefHeight(width: Double) = row.prefHeight(-1.0)
+    }
     private var target = 0.0
     private var animation: Timeline? = null
 
@@ -163,8 +168,6 @@ class Shelf(title: String, private val onViewAll: (() -> Unit)? = null, trailing
         val header = HBox(10.0, label(title, "shelf-title"), spacer()).apply { styleClass += "shelf-header" }
         trailing?.let { header.children += it }
         onViewAll?.let { header.children += label("View all", "link-button").onClick(it) }
-        viewport.minHeightProperty().bind(row.heightProperty())
-        viewport.prefHeightProperty().bind(row.heightProperty())
         val clip = Rectangle()
         clip.widthProperty().bind(viewport.widthProperty())
         clip.heightProperty().bind(viewport.heightProperty().add(30))

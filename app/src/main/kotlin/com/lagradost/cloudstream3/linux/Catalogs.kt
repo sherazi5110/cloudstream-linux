@@ -14,7 +14,7 @@ import org.json.JSONArray
 object Catalogs {
     data class Entry(val index: Int, val section: MainPageData, val enabled: Boolean)
 
-    private val prefs: SharedPreferences get() = Platform.context.getSharedPreferences("home_catalogs", 0)
+    private val prefs: SharedPreferences get() = Platform.context.getSharedPreferences(Profiles.file("home_catalogs"), 0)
     private val listeners = mutableListOf<() -> Unit>()
 
     fun onChange(listener: () -> Unit) {

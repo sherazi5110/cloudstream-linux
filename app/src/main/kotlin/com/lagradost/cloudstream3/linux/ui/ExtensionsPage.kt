@@ -6,6 +6,8 @@ import com.lagradost.cloudstream3.linux.PluginManager
 import com.lagradost.cloudstream3.linux.PluginWrapper
 import com.lagradost.cloudstream3.linux.RepositoryData
 import com.lagradost.cloudstream3.linux.RepositoryManager
+import com.lagradost.cloudstream3.linux.StremioAddons
+import com.lagradost.cloudstream3.linux.StremioApi
 import com.lagradost.cloudstream3.linux.statusName
 import javafx.geometry.Pos
 import javafx.scene.Node
@@ -16,6 +18,7 @@ import javafx.scene.control.ProgressIndicator
 import javafx.scene.control.TextField
 import javafx.scene.image.ImageView
 import javafx.scene.layout.FlowPane
+import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
@@ -89,7 +92,15 @@ class ExtensionsPage : StackPane(), Refreshable {
         // Cards share the row evenly: as many ~300px columns as fit.
         grid.widthProperty().addListener { _, _, _ -> sizeCards() }
 
-        val page = VBox(18.0, header, repoCard, filterRow, types, grid).pad(22.0, 36.0, 32.0, 36.0)
+        val extensions = VBox(18.0, header, repoCard, filterRow, types, grid)
+        val addons = StremioPane()
+        val body = StackPane(extensions)
+        // Two kinds of sources: CloudStream extensions (repositories) and Stremio add-ons (manifest URLs).
+        val kind = ChipGroup { i -> body.children.setAll(if (i == 0) extensions else addons.also { it.render() }) }.apply {
+            setItems(listOf("CloudStream extensions", "Stremio add-ons"), 0)
+            id = "ext-kind"
+        }
+        val page = VBox(18.0, kind, body).pad(22.0, 36.0, 32.0, 36.0)
         children += pageScroll(page)
         ui.launch { PluginManager.version.collect { applyFilter() } }
     }
@@ -178,7 +189,7 @@ class ExtensionsPage : StackPane(), Refreshable {
         }.sortedWith(compareBy({ it.installed == null }, { it.name.lowercase() }))
         shown = PAGE
         renderGrid()
-        val loaded = Engine.providers().size
+        val loaded = Engine.allProviders().size
         if (!loadingRepos) stats.text = "${available.size} available · ${installed.size} installed · $loaded providers loaded" +
             (PluginManager.failures.size.takeIf { it > 0 }?.let { " · $it failed" } ?: "")
     }
@@ -330,5 +341,85 @@ class ExtensionsPage : StackPane(), Refreshable {
 
     private companion object {
         const val PAGE = 60
+    }
+}
+
+/** Installed Stremio add-ons: add by manifest URL, turn on/off, remove. */
+class StremioPane : VBox(18.0) {
+    private val field = TextField().apply { promptText = "Add-on address: https://…/manifest.json or stremio://…" }
+    private val list = VBox(12.0)
+    private val status = label("", "muted")
+
+    init {
+        javafx.scene.layout.HBox.setHgrow(field, Priority.ALWAYS)
+        val install = button("Install add-on", Icons.ADD, "btn-accent") { install(field.text) }
+        field.setOnAction { install(field.text) }
+        val header = vbox(4.0, label("Stremio add-ons", "h2"), label(
+            "Stremio community add-ons work here: their catalogs show on Home, in Search and in the catalog editor, and their " +
+                "streams play in the built-in player. Add-ons that only offer torrents aren't supported.", "muted").apply { isWrapText = true; maxWidth = 900.0 })
+        val add = vbox(10.0, label("ADD AN ADD-ON", "section-label"), hbox(10.0, field, install), status).apply { styleClass += "card" }
+        children.addAll(header, add, list)
+        StremioAddons.onChange { javafx.application.Platform.runLater { render() } }
+    }
+
+    private fun install(text: String) {
+        if (text.isBlank()) return
+        status.text = "Installing…"
+        status.styleClass.setAll("label", "muted")
+        ui.launch {
+            try {
+                val addon = withContext(Engine.dispatcher) { StremioAddons.install(text) }
+                field.clear()
+                status.text = "Installed ${addon.manifest.name} ${addon.manifest.version}"
+                Toasts.show("${addon.manifest.name} added")
+            } catch (t: Throwable) {
+                status.text = "Couldn't install: ${t.message ?: t}"
+                status.styleClass.setAll("label", "error-text")
+            }
+        }
+    }
+
+    fun render() {
+        val addons = StremioAddons.all()
+        val nodes = addons.map { card(it) }.toMutableList<Node>()
+        if (addons.none { it.url == StremioAddons.CINEMETA }) {
+            nodes += hbox(12.0, vbox(2.0, label("Cinemeta", "bold"),
+                label("Stremio's official catalog of films and series: popular, new and featured lists with rich details. Add a streaming add-on to play them.", "faint", "small").apply { isWrapText = true }).apply { HBox.setHgrow(this, Priority.ALWAYS) },
+                button("Add", Icons.ADD, "btn-ghost") { install(StremioAddons.CINEMETA) }).apply { styleClass += "card" }
+        }
+        if (addons.isEmpty()) nodes.add(0, label("No add-ons yet. Paste an add-on's manifest address above, or start with Cinemeta below.", "muted"))
+        list.children.setAll(nodes)
+    }
+
+    private fun card(a: StremioAddons.Addon): Node {
+        val m = a.manifest
+        val logo = StackPane().apply {
+            styleClass += "addon-logo"
+            setMinSize(46.0, 46.0); setMaxSize(46.0, 46.0)
+            if (m.logo != null) children += ImageView().also { Images.load(it, m.logo, 46.0, 46.0) }
+            else children += label(m.name.filter { it.isLetterOrDigit() }.take(2).uppercase(), "bold")
+            roundedClip(this, 12.0)
+        }
+        val catalogs = m.catalogs.count { !it.needsExtra }
+        val tags = hbox(6.0, *listOfNotNull(
+            if (catalogs > 0) label("$catalogs catalogs", "tag") else null,
+            if (m.catalogs.any { it.searchable }) label("Search", "tag") else null,
+            if (m.resources.any { it.name == "meta" }) label("Details", "tag") else null,
+            if (m.resources.any { it.name == "stream" }) label("Streams", "tag", "accent") else null,
+            if (m.resources.any { it.name == "subtitles" }) label("Subtitles", "tag") else null,
+            label(m.types.joinToString(" · "), "faint", "small"),
+        ).toTypedArray())
+        val text = vbox(4.0, hbox(8.0, label(m.name, "bold"), label("v${m.version}", "faint", "small")),
+            label(m.description.ifBlank { a.base }, "muted", "small").apply { isWrapText = true; maxHeight = 36.0 }, tags).apply {
+            HBox.setHgrow(this, Priority.ALWAYS); minWidth = 0.0
+        }
+        val api = if (catalogs > 0) Engine.allProviders().firstOrNull { it is StremioApi && it.mainUrl == a.base } else null
+        val tune = api?.let { button(null, Icons.TUNE, "btn-ghost") { Nav.window.showOverlay(HomeManager(Engine.providers().filter { p -> p.hasMainPage }, it)) }.tooltip("Choose its catalogs for Home") }
+        val remove = button(null, Icons.DELETE, "btn-ghost") { StremioAddons.remove(a.url); Toasts.show("${m.name} removed") }.tooltip("Remove")
+        val toggle = Switch(a.enabled) { StremioAddons.setEnabled(a.url, it) }
+        return hbox(14.0, *listOfNotNull(logo, text, tune, remove, toggle).toTypedArray()).apply {
+            styleClass += "card"
+            if (!a.enabled) opacity = 0.6
+        }
     }
 }

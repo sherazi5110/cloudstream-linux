@@ -1,7 +1,11 @@
 # CloudStream for Linux
 
-Run **CloudStream extensions on Ubuntu/Linux**, from the same repositories the Android app uses, with no changes to the extensions.
+Run **CloudStream extensions and Stremio add-ons on Ubuntu/Linux**, from the same repositories the Android app uses, with no changes to the extensions.
 
+- **New look (6.0):** a slim icon rail, a top bar with sections (Home, Movies, Series, Anime…), search and your profile, and a full-width featured banner with backdrop, rating, "#1 in …", plot, *Play* and *More Info*. A new logo whose letters follow your theme colour.
+- **Profiles:** "Who's watching?", twelve built-in avatars in eight colours (or your own picture), an optional PIN, and each profile's own history, list, home layout, theme and player settings.
+- **Kids profiles:** only the extensions you allow (NSFW never), chosen types (e.g. cartoons and anime), a maximum age rating and blocked words; no Settings or Extensions pages, and a PIN keeps grown-up profiles locked.
+- **Stremio add-ons:** install any add-on by its manifest address (or `stremio://` link). Its catalogs appear on Home, in Search and in the catalog editor; details come from the add-on or Cinemeta; streams from every add-on that has them play in the built-in player (torrent-only add-ons aren't supported).
 - **Same extensions:** add repositories by URL, `cloudstreamrepo://` link or shortcode. Android `.cs3` files are translated from Dalvik to JVM bytecode automatically; cross-platform `.jar` builds are used directly.
 - **Fast, streaming UI:** home sections, search results and video sources appear as each one arrives. A slow or dead site never blocks the rest, and the window opens immediately while extensions load in parallel.
 - **Built-in player, VLC inside the app:** libVLC decodes (every format VLC plays, hardware-accelerated when available) and the video is drawn inside the app window, so it works on X11, Wayland and ChromeOS alike. It has its own controls:
@@ -23,7 +27,11 @@ Run **CloudStream extensions on Ubuntu/Linux**, from the same repositories the A
 
 | | |
 |---|---|
-| ![Home](docs/screenshots/home.png) | ![Details](docs/screenshots/details.png) |
+| ![Home](docs/screenshots/home.png) | ![Who's watching](docs/screenshots/profiles.png) |
+| ![Profile editor](docs/screenshots/profile-editor.png) | ![Kids profile settings](docs/screenshots/profile-editor-kids.png) |
+| ![Kids home](docs/screenshots/kids-home.png) | ![Stremio add-ons](docs/screenshots/addons.png) |
+| ![Movies section](docs/screenshots/section-movies.png) | ![Source menu](docs/screenshots/source-menu.png) |
+| ![Liquid glass](docs/screenshots/theme-glass.png) | ![Details](docs/screenshots/details.png) |
 | ![Player](docs/screenshots/player.png) | ![Sources in the player](docs/screenshots/player-sources.png) |
 | ![Online subtitles](docs/screenshots/player-online.png) | ![Subtitle on screen](docs/screenshots/player-subtitle.png) |
 | ![Zoom](docs/screenshots/player-zoom.png) | ![Loading](docs/screenshots/loading.png) |
@@ -31,7 +39,7 @@ Run **CloudStream extensions on Ubuntu/Linux**, from the same repositories the A
 | ![Combined feed](docs/screenshots/home-feed.png) | ![Extensions](docs/screenshots/extensions.png) |
 | ![Settings](docs/screenshots/settings.png) | ![Light theme](docs/screenshots/theme-light.png) |
 
-*(Screenshots use the offline demo extension in `tests/DemoProvider`.)*
+*(Screenshots use the offline demo extension in `tests/DemoProvider` and the mock Stremio add-on in `tests/mock-archive`.)*
 
 See **[docs/ANALYSIS.md](docs/ANALYSIS.md)** for how the Android app works, and **[docs/PLAYER-AND-CATALOGS.md](docs/PLAYER-AND-CATALOGS.md)** for how the built-in player, online subtitles and catalogs work (VLC source, the other Linux app, and this code), all with file and line references.
 

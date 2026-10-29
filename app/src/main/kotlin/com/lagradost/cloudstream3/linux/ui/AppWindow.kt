@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.PluginManager
+import com.lagradost.cloudstream3.linux.Profiles
 import com.lagradost.cloudstream3.linux.Settings
 import com.lagradost.cloudstream3.linux.Updates
 import javafx.animation.FadeTransition
@@ -38,17 +39,24 @@ import kotlin.system.exitProcess
 
 object AppInfo {
     const val NAME = "CloudStream for Linux"
-    const val VERSION = "5.0.0"
+    const val VERSION = "6.0.0"
     const val CREDIT = "Tennant Creek"
 }
 
 class DesktopApp : Application() {
     override fun start(stage: Stage) {
+        // Inter (SIL OFL) for the same look on every distro; missing glyphs fall back to system fonts.
+        listOf("Inter-Regular", "Inter-SemiBold", "Inter-Bold", "InterDisplay-ExtraBold").forEach { f ->
+            DesktopApp::class.java.getResourceAsStream("/ui/fonts/$f.otf")?.use { javafx.scene.text.Font.loadFont(it, 13.0) }
+        }
+        com.lagradost.cloudstream3.linux.Settings.migrateToProfiles()
         val window = AppWindow(stage)
         val scene = Scene(window, 1366.0, 840.0, Color.web(Theme.background))
         scene.stylesheets += DesktopApp::class.java.getResource("/ui/theme.css")!!.toExternalForm()
         stage.title = "CloudStream"
-        DesktopApp::class.java.getResourceAsStream("/ui/icon.png")?.use { stage.icons += Image(it) }
+        // The window icon is the logo in the current theme colour.
+        stage.icons.setAll(Logo.image(256.0))
+        Theme.onChange { stage.icons.setAll(Logo.image(256.0)) }
         stage.minWidth = 980.0
         stage.minHeight = 640.0
         stage.scene = scene
@@ -76,22 +84,29 @@ class DesktopApp : Application() {
     }
 }
 
-enum class Tab(val label: String, val icon: String) {
+enum class Tab(val label: String, val icon: String, val forKids: Boolean = true) {
     HOME("Home", Icons.HOME),
     SEARCH("Search", Icons.SEARCH),
-    LIBRARY("Library", Icons.LIBRARY),
-    EXTENSIONS("Extensions", Icons.EXTENSION),
-    SETTINGS("Settings", Icons.SETTINGS),
+    LIBRARY("My list", Icons.LIBRARY),
+    EXTENSIONS("Extensions & add-ons", Icons.EXTENSION, forKids = false),
+    SETTINGS("Settings", Icons.SETTINGS, forKids = false),
+}
+
+/** A page that puts its own controls in the top bar (e.g. Home's source picker). */
+interface TopBarActions {
+    fun topBarActions(): List<Node>
 }
 
 /**
- * Root layout, back to front: wallpaper, dock + pages, status pill, overlays (sheets,
- * loading screen), toasts, the player surface, and the startup splash.
+ * Root layout, back to front: wallpaper, icon rail + pages under a floating top bar, status
+ * pill, overlays (sheets, loading screen), toasts, the player surface, and the startup splash.
  */
 class AppWindow(val stage: Stage) : StackPane() {
     private val wallpaper = StackPane().apply { isMouseTransparent = true }
     private val content = StackPane()
-    private val layout = BorderPane(content)
+    private val topBar = TopBar(this)
+    private val main = StackPane(content, topBar).apply { minWidth = 0.0 }
+    private val layout = BorderPane(main)
     private val overlay = StackPane().apply { isPickOnBounds = false }
     private val playerLayer = StackPane().apply { isPickOnBounds = false }
     private val navItems = mutableMapOf<Tab, Node>()
@@ -108,8 +123,12 @@ class AppWindow(val stage: Stage) : StackPane() {
         maxHeight = Region.USE_PREF_SIZE
     }
 
+    private val rail = VBox(6.0).apply { styleClass += "rail"; alignment = Pos.TOP_CENTER }
+    private val railAvatar = StackPane().apply { styleClass += "rail-avatar" }
+
     init {
         Nav.window = this
+        StackPane.setAlignment(topBar, Pos.TOP_CENTER)
         layout.left = dock()
         val toastHost = VBox(8.0).apply {
             alignment = Pos.BOTTOM_CENTER
@@ -137,35 +156,59 @@ class AppWindow(val stage: Stage) : StackPane() {
             }
         }
         show(Tab.HOME)
+        Profiles.onChange { Platform.runLater { profileChanged() } }
     }
 
-    /** Floating dock with labelled icons; fullscreen toggle at the bottom. */
+    /** Slim icon rail: logo, pages, then settings, fullscreen and the profile picture. */
     private fun dock(): Node {
-        val logo = StackPane(ImageView(Image(AppWindow::class.java.getResourceAsStream("/ui/icon.png"), 48.0, 48.0, true, true))).apply {
-            styleClass += "dock-logo"
-            setMinSize(48.0, 48.0); setMaxSize(48.0, 48.0)
-        }
-        val dock = VBox(4.0, logo, Region().apply { minHeight = 10.0 }).apply {
-            styleClass += "dock"
-            alignment = Pos.TOP_CENTER
-        }
-        Tab.entries.forEach { tab ->
-            if (tab == Tab.SETTINGS) dock.children += spacer()
-            val item = VBox(icon(tab.icon, 22.0), label(tab.label, "dock-label")).apply {
-                styleClass += "dock-item"
+        renderRail()
+        return rail
+    }
+
+    private fun renderRail() {
+        val logo = Logo(40.0).apply { styleClass += "rail-logo" }
+        rail.children.setAll(StackPane(logo).apply { pad(2.0, 0.0, 18.0, 0.0); onClick { show(Tab.HOME) } })
+        navItems.clear()
+        val kids = Profiles.isKids
+        Tab.entries.filter { !kids || it.forKids }.forEach { tab ->
+            if (tab == Tab.SETTINGS) rail.children += spacer()
+            val item = StackPane(icon(tab.icon, 22.0)).apply {
+                styleClass += "rail-item"
+                if (tab == currentTab) styleClass += "active"
                 onClick { show(tab) }
+                tooltip(tab.label)
             }
             navItems[tab] = item
-            dock.children += item
+            rail.children += item
         }
-        val fullscreen = VBox(icon(Icons.FULLSCREEN, 20.0)).apply {
-            styleClass += "dock-item"
+        if (kids) rail.children += spacer()
+        rail.children += StackPane(icon(Icons.FULLSCREEN, 20.0)).apply {
+            styleClass += "rail-item"
             onClick { stage.isFullScreen = !stage.isFullScreen }
             tooltip("Fullscreen (F11)")
         }
-        dock.children += fullscreen
-        return StackPane(dock).apply { pad(14.0, 0.0, 14.0, 14.0) }
+        railAvatar.children.setAll(Avatars.node(Profiles.current.avatar, 36.0, round = true))
+        railAvatar.onClick { ProfileMenu.show(railAvatar) }
+        railAvatar.tooltip(Profiles.current.name)
+        rail.children += railAvatar
     }
+
+    /** After switching profile: its own look, library and home; kids lose the grown-up pages. */
+    private fun profileChanged() {
+        backStack.forEach { (it as? Disposable)?.dispose() }
+        backStack.clear()
+        pages.values.forEach { (it as? Disposable)?.dispose() }
+        pages.clear()
+        Theme.changed()
+        Vlc.optionsChanged(Playback.active != null)
+        renderRail()
+        topBar.render()
+        PluginManager.bumpVersion()
+        show(Tab.HOME)
+    }
+
+    /** The top bar sits over the page; it turns solid once the page scrolls under it. */
+    fun setTopBarSolid(solid: Boolean) = topBar.setSolid(solid)
 
     private fun applyTheme() {
         style = Theme.rootStyle()
@@ -200,14 +243,31 @@ class AppWindow(val stage: Stage) : StackPane() {
     }
 
     fun show(tab: Tab) {
+        if (Profiles.isKids && !tab.forKids) return
         backStack.forEach { (it as? Disposable)?.dispose() }
         backStack.clear()
         navItems[currentTab]?.styleClass?.remove("active")
         currentTab = tab
         navItems[tab]?.styleClass?.add("active")
         val node = page(tab)
-        content.children.setAll(node)
+        setContent(node)
         (node as? Refreshable)?.onShow()
+    }
+
+    /** Shows a page under the top bar; Home's banner runs underneath it, other pages start below. */
+    private fun setContent(node: Node) {
+        content.children.setAll(node)
+        val fullBleed = node is HomePage
+        content.padding = if (fullBleed) Insets.EMPTY else Insets(TopBar.HEIGHT, 0.0, 0.0, 0.0)
+        topBar.setSolid(!fullBleed)
+        topBar.pageChanged(node, currentTab)
+    }
+
+    /** Opens Home on one of its sections (Movies, Series…). */
+    fun showSection(section: Section) {
+        show(Tab.HOME)
+        (pages[Tab.HOME] as? HomePage)?.setSection(section)
+        topBar.pageChanged(pages[Tab.HOME]!!, Tab.HOME)
     }
 
     /** Opens a settings category directly. */
@@ -219,7 +279,7 @@ class AppWindow(val stage: Stage) : StackPane() {
     /** Opens a sub-page (details, view-all) on top of the current tab. */
     fun push(node: Node) {
         backStack.addLast(node)
-        content.children.setAll(node)
+        setContent(node)
         node.opacity = 0.0
         animate(node.opacityProperty(), 1.0, 160.0)
     }
@@ -228,7 +288,7 @@ class AppWindow(val stage: Stage) : StackPane() {
         val top = backStack.removeLastOrNull() ?: return false
         (top as? Disposable)?.dispose()
         val node = backStack.lastOrNull() ?: page(currentTab)
-        content.children.setAll(node)
+        setContent(node)
         (node as? Refreshable)?.onShow()
         return true
     }
@@ -238,8 +298,12 @@ class AppWindow(val stage: Stage) : StackPane() {
         overlay.children.setAll(node)
     }
 
-    fun closeOverlay(): Boolean {
+    fun isTopOverlay(node: Node) = overlay.children.lastOrNull() === node
+
+    /** Closes the sheet or menu on top; a [Blocking] one (startup profile picker) only with [force]. */
+    fun closeOverlay(force: Boolean = false): Boolean {
         val top = overlay.children.lastOrNull() ?: return false
+        if (!force && (top as? Blocking)?.blocking == true) return true
         (top as? Disposable)?.dispose()
         overlay.children.clear()
         return true
@@ -286,6 +350,10 @@ class AppWindow(val stage: Stage) : StackPane() {
             }
             while (loading.isActive && System.currentTimeMillis() - shownAt < 6000) delay(50)
             delay((1100 - (System.currentTimeMillis() - shownAt)).coerceAtLeast(0))
+            // With a PIN on the last-used profile the picker always comes up, so a restart can't skip the PIN.
+            if (Profiles.all().size > 1 && (Profiles.askOnStart || Profiles.current.pin != null) && System.getenv("CS_SCREENSHOT") == null) {
+                showOverlay(ProfilePicker(startup = true))
+            }
             hideSplash()
             loading.join()
             if (Settings.autoUpdateExtensions) {
@@ -324,7 +392,7 @@ class SplashScreen : StackPane() {
 
     init {
         styleClass += "splash"
-        val logo = ImageView(Image(SplashScreen::class.java.getResourceAsStream("/ui/icon.png"), 112.0, 112.0, true, true)).apply {
+        val logo = Logo(112.0).apply {
             effect = javafx.scene.effect.DropShadow(40.0, Color.web(Theme.accent, 0.45))
         }
         val center = vbox(14.0,

@@ -4,9 +4,28 @@ Read this first when continuing work on CloudStream for Linux.
 
 ## State (2026-10-29)
 
-- `main` = release **V4.0.1** (published with .deb, .flatpak and .tar). Tags use a capital V (`V4.0.1`);
+- `main` = release **V5.0.0** (published with .deb, .flatpak and .tar). Tags use a capital V (`V5.0.0`);
   CI publishes a release for any tag starting with `v` or `V`.
-- Branch **`v5`** = the next version, **5.0.0** (not released yet). Done on it:
+- Branch **`v6`** = the next version, **6.0.0** (not released yet). Done on it:
+  1. **New shell** (`ui/AppWindow.kt`, `ui/Shell.kt`): icon rail, `TopBar` with `Section`s (Home, Movies, Series,
+     Anime, Cartoons, Documentaries, Live TV: shown when an extension serves them), search pill, profile menu.
+     Menus are `Popover`s drawn in the window (not popup windows) so they follow the theme. Pages implementing
+     `TopBarActions` put controls in the bar (Home's source picker). Home's `Hero` is full-width under the bar,
+     loads each featured title's details for backdrop/logo/plot, and fades out with a gradient clip.
+  2. **Logo** (`ui/Logo.kt`, `packaging/linux/cloudstream-linux.svg|png`): "SC" (Inter Display Black outlines)
+     over a white cloud on black; letters take the accent colour in the app and the window icon.
+  3. **Profiles** (`Profiles.kt`, `ui/ProfilesUi.kt`, `ui/Avatars.kt`): per-profile prefs files `library`,
+     `home_catalogs`, `profile_settings` (default profile = the original files; others `<file>@<id>`).
+     `Settings.migrateToProfiles()` moves v5's theme/player keys into the first profile once. Kids filter
+     (`ContentFilter`) is applied in `Engine.providers()/home()/search()`, `GridPage` and `DetailsPage`.
+     `Engine.allProviders()` ignores the profile (extension management, tests).
+  4. **Stremio add-ons** (`Stremio.kt`): `StremioAddons` store + `StremioApi : MainAPI` per add-on; streams are
+     collected from every enabled add-on that serves the id (like Stremio). Extensions page has a "Stremio
+     add-ons" tab. Mock add-on: `tests/mock-archive/server.py` `/addon/`. Tests: `StremioProfilesTest`.
+  5. **Fonts**: Inter (OFL, subset) in `resources/ui/fonts`, loaded in `DesktopApp.start`.
+  6. Fixed: `Shelf` rows could stay squashed when cards arrived after the first layout (viewport now measures
+     its row instead of binding to its height).
+- Previous version (`v5`, now released) did:
   1. **VLC is the only player.** mpv (+ uosc UI, IPC), and the external VLC/ffplay launchers were removed.
      The CLI `play` command went with them. The player is `ui/BuiltinPlayer.kt` + `ui/VlcVideo.kt`.
   2. **Liquid glass theme** (`ThemeMode.GLASS`) + nine presets (`ThemePreset`), in `ui/Theme.kt`; glass CSS
@@ -24,7 +43,7 @@ Read this first when continuing work on CloudStream for Linux.
      extension says `hasNext = false` (Demo's "Endless catalog" has 4 pages for testing). **Posters on slow
      connections** (`Images`): disk cache read without waiting for a download slot, 12 slots, posters that left
      the screen give their slot up, TMDB images fetched at the shown width, one retry, shorter timeouts.
-- Tests: `./gradlew test`, 17 tests, all passing (libVLC must be installed for the playback test).
+- Tests: `./gradlew test`, 19 tests, all passing (libVLC must be installed for the playback test).
 
 ## How the owner works
 
@@ -35,7 +54,7 @@ Read this first when continuing work on CloudStream for Linux.
   a feature reference only.
 - They value: VLC built-in player only; polish; screenshots as proof that things work.
 
-## Next: Stremio add-on support (the owner's next request)
+## Stremio add-ons: done in v6 (original plan below, for reference)
 
 Stremio add-ons are plain HTTP + JSON (protocol: github.com/Stremio/stremio-addon-sdk/blob/master/docs/protocol.md):
 `<base>/manifest.json`, `<base>/catalog/<type>/<id>[/extra].json`, `<base>/meta/<type>/<id>.json`,
@@ -55,9 +74,9 @@ the subtitles part (OpenSubtitles v3 + Cinemeta). Suggested design:
 ## Remaining ideas (from the owner's recording of the other app)
 
 Not done yet, roughly by value: Cloudflare solver (JavaFX WebView implementing `WebViewResolver`; note
-javafx-web adds a lot of size), downloads for offline viewing, profiles, Discord "now watching", AniSkip
-(skip intro), richer details page (cast, trailers, similar: easiest via Cinemeta once Stremio support
-exists), rename catalog rows, UI zoom, fonts, extension tabs with update history, more subtitle providers
+javafx-web adds a lot of size), downloads for offline viewing, Discord "now watching", AniSkip
+(skip intro), richer details page (redesign like the new Home banner; trailers and similar titles via
+Cinemeta), rename catalog rows, UI zoom, extension tabs with update history, more subtitle providers
 (SubDL/Subsource need API keys), open a local video file, RPM/AppImage packages.
 
 ## Upkeep (see the owner's question about the app ageing)
@@ -71,8 +90,9 @@ exists), rename catalog rows, UI zoom, fonts, extension tabs with update history
 
 ## Dev environment tips
 
-- GUI tour: `CS_SCREENSHOT=/tmp/shot CS_SCREENSHOT_SEARCH=pixel cloudstream-linux` (needs a display, e.g.
-  `Xvfb :99`, plus `tests/mock-archive/server.py 8766` and a data home with the Demo extension installed).
+- GUI tour: `CS_SCREENSHOT=/tmp/shot CS_SCREENSHOT_SEARCH=pixel cloudstream-linux` (`CS_SCREENSHOT_ONLY=v6` or
+  `=glass` runs a short part). Needs a display, e.g.
+  `Xvfb :99`, plus `tests/mock-archive/server.py 8766` and a data home with the Demo extension installed.
 - `-Dprism.order=sw` for software rendering under Xvfb. VLC frames are part of the JavaFX scene, so
   window snapshots include the video.
 - Don't run downloaded build scripts (e.g. VLC's configure) locally; verify via CI instead.

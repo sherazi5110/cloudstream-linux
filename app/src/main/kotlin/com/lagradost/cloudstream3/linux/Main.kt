@@ -59,7 +59,7 @@ private fun List<String>.positional(): List<String> {
 }
 
 private fun requireProvider(name: String): MainAPI =
-    Engine.provider(name) ?: error("No provider '$name'. Loaded: ${Engine.providers().joinToString { it.name }}")
+    Engine.provider(name) ?: error("No provider '$name'. Loaded: ${Engine.allProviders().joinToString { it.name }}")
 
 private suspend fun loadItem(api: MainAPI, url: String): LoadResponse =
     Engine.load(api, url) ?: error("${api.name} returned nothing for $url")
@@ -108,7 +108,7 @@ suspend fun cli(args: List<String>): Int {
             println("Loaded ${it.manifest.name} (${it.manifest.pluginClassName}): providers=${it.providers.map { p -> p.name }} extractors=${it.extractorCount}")
             if (AndroidStubLoader.generated.isNotEmpty()) println("Stubbed Android classes: ${AndroidStubLoader.generated}")
         }
-        "providers" -> Engine.providers().forEach {
+        "providers" -> Engine.allProviders().forEach {
             println("${it.name.padEnd(24)} ${it.lang}  ${it.supportedTypes.joinToString(",")}  ${it.mainUrl}  [${it.sourcePlugin?.let { f -> File(f).name } ?: "built-in"}]")
         }
         "home" -> Engine.home(listOf(requireProvider(pos[1]))).toList().sortedBy { it.order }.forEach { row ->
@@ -116,7 +116,7 @@ suspend fun cli(args: List<String>): Int {
             row.list.list.forEach { println("  ${it.name}\t${it.url}") }
         }
         "search" -> {
-            val apis = args.option("--provider")?.let { listOf(requireProvider(it)) } ?: Engine.providers()
+            val apis = args.option("--provider")?.let { listOf(requireProvider(it)) } ?: Engine.allProviders()
             Engine.search(pos.drop(1).joinToString(" "), apis).collect { batch ->
                 batch.results.forEach { r -> println("[${batch.api.name}] ${r.name} (${r.type ?: "?"})\t${r.url}") }
             }
@@ -163,7 +163,7 @@ suspend fun cli(args: List<String>): Int {
             println("repos     ${RepositoryManager.getRepositories().size}")
             println("plugins   ${PluginManager.loaded.size} loaded, ${PluginManager.failures.size} failed")
             PluginManager.failures.forEach { (n, e) -> println("  FAILED $n: $e") }
-            println("providers ${Engine.providers().joinToString { it.name }}")
+            println("providers ${Engine.allProviders().joinToString { it.name }}")
             if (AndroidStubLoader.generated.isNotEmpty()) println("stubbed   ${AndroidStubLoader.generated.joinToString()}")
         }
         "help", "--help", "-h" -> print(USAGE)
