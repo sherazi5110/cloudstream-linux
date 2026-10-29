@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=CloudStream
+GenericName=Media Center
+Comment=Run CloudStream extensions on Linux
+Exec=cloudstream-linux %u
+Icon=io.github.sherazi5110.CloudStreamLinux
+Terminal=false
+Categories=AudioVideo;Video;Player;
+Keywords=movies;series;anime;streaming;cloudstream;
+MimeType=x-scheme-handler/cloudstreamrepo;
+StartupWMClass=com.lagradost.cloudstream3.linux.ui.DesktopApp

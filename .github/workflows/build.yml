@@ -3,7 +3,7 @@ name: Build
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    tags: ["v*", "V*"]
   pull_request:
 
 jobs:
@@ -39,6 +39,14 @@ jobs:
           ./scripts/build-deb.sh
           ./gradlew :app:distTar
           mv app/build/distributions/cloudstream-linux.tar "app/build/distributions/cloudstream-linux-${GITHUB_REF_NAME//\//-}.tar"
+          # The self-contained app image, for the Flatpak job (a tar keeps file permissions).
+          tar -C app/build/jpackage -cf build/cloudstream-linux-app.tar cloudstream-linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-image
+          path: build/cloudstream-linux-app.tar
+          retention-days: 3
 
       - uses: actions/upload-artifact@v4
         with:
@@ -48,10 +56,39 @@ jobs:
             app/build/distributions/*.tar
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
             build/*.deb
             app/build/distributions/*.tar
           generate_release_notes: true
+
+  flatpak:
+    # Builds libVLC inside the Freedesktop SDK and packs the app image into a .flatpak.
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-image
+          path: build
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/io.github.sherazi5110.CloudStreamLinux.yml
+          bundle: cloudstream-linux.flatpak
+          cache-key: flatpak-builder-${{ hashFiles('packaging/flatpak/*.yml') }}
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: cloudstream-linux.flatpak

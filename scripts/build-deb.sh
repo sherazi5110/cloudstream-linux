@@ -12,11 +12,11 @@ VERSION=$(grep -o 'VERSION = "[^"]*"' app/src/main/kotlin/com/lagradost/cloudstr
 ARCH=$(dpkg --print-architecture)
 STAGE=build/deb/cloudstream-linux
 rm -rf build/deb && mkdir -p "$STAGE/DEBIAN" "$STAGE/opt" "$STAGE/usr/bin" \
-  "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/192x192/apps"
+  "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/512x512/apps"
 
 cp -r app/build/jpackage/cloudstream-linux "$STAGE/opt/cloudstream-linux"
 ln -s /opt/cloudstream-linux/bin/cloudstream-linux "$STAGE/usr/bin/cloudstream-linux"
-cp packaging/linux/cloudstream-linux.png "$STAGE/usr/share/icons/hicolor/192x192/apps/cloudstream-linux.png"
+cp packaging/linux/cloudstream-linux.png "$STAGE/usr/share/icons/hicolor/512x512/apps/cloudstream-linux.png"
 sed -e "s|@EXEC@|/opt/cloudstream-linux/bin/cloudstream-linux|" -e "s|@ICON@|cloudstream-linux|" \
   packaging/linux/cloudstream-linux.desktop > "$STAGE/usr/share/applications/cloudstream-linux.desktop"
 

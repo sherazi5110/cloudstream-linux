@@ -53,7 +53,11 @@ repo.json → plugins.json → Extension.cs3 ──dex2jar──► JVM classes 
 | `examples/InternetArchiveProvider/` | A complete extension (public-domain films from archive.org), built **both** as a real Dalvik `.cs3` and as a `.jar`, plus a ready-to-host `repo.json`. |
 | `tests/` | Offline demo extension (series, slow host, dead host, token-protected HLS), mock site (with stand-ins for the subtitle services), fake mpv — used by the tests and screenshot tour. |
 
-## Install (Ubuntu 22.04+)
+## Install
+
+**Ready-made packages** (.deb for Ubuntu/Debian, Flatpak for any distro, and other Linux): see **[INSTALL.md](INSTALL.md)**.
+
+### Build from source (Ubuntu 22.04+)
 
 ```bash
 sudo apt install openjdk-21-jdk git libvlc5 vlc-plugin-base   # + mpv if you want the mpv player
@@ -67,6 +71,7 @@ Or build a self-contained `.deb` with a bundled Java runtime:
 ```bash
 ./scripts/build-deb.sh                 # build/cloudstream-linux_<version>_amd64.deb
 ./scripts/uninstall-user-install.sh    # only if you used install.sh before (keeps your data)
+./scripts/build-flatpak.sh             # build/cloudstream-linux.flatpak (needs flatpak-builder)
 sudo apt install ./build/cloudstream-linux_4.0.0_amd64.deb   # pulls in libVLC
 # remove later with: sudo apt remove cloudstream-linux
 ```
