@@ -32,7 +32,7 @@ import javax.xml.stream.XMLStreamConstants
 
 /**
  * Live TV: channel lists from IPTV sources, kept apart from Home and Search.
- *  - M3U playlists (what Kodi's IPTV Simple client reads), with an optional XMLTV guide;
+ *  - M3U playlists (by address or as a file), with an optional XMLTV guide;
  *  - Xtream Codes logins (player_api.php), the format most IPTV services use;
  *  - Stremio (and Nuvio) add-ons: their "tv"/"channel" catalogs. Add-ons installed on the
  *    Extensions page that offer TV channels show up here automatically.
@@ -221,7 +221,7 @@ object LiveTv {
         }
     }
 
-    /** #EXTM3U playlists: attributes, #EXTVLCOPT headers and Kodi's "url|Header=value" form. */
+    /** #EXTM3U playlists: attributes, #EXTVLCOPT headers and the "url|Header=value" form. */
     fun parseM3u(sourceId: String, text: String): List<Channel> {
         val out = mutableListOf<Channel>()
         var info: String? = null
@@ -566,59 +566,3 @@ object ChannelLogos {
     }
 }
 
-/**
- * Kodi add-on zips. Kodi add-ons are mostly Python programs that only run inside Kodi, but IPTV
- * ones usually carry what Kodi's IPTV Simple client needs: M3U playlists (inside the zip or as
- * addresses), TV guide (XMLTV) addresses, or Xtream "get.php" playlist links. Those are found,
- * checked and added as Live TV sources.
- */
-object KodiAddons {
-    data class Result(val name: String, val added: List<Pair<LiveTv.Source, Int>>)
-
-    private val urlPattern = Regex("""https?://[^\s"'<>\\)\]]+""")
-    private val textFile = Regex(".*\\.(xml|py|json|txt|m3u8?|ini|cfg|conf|yaml|yml|properties)$", RegexOption.IGNORE_CASE)
-
-    suspend fun import(zip: File): Result = withContext(Dispatchers.IO) {
-        val texts = mutableMapOf<String, String>()
-        java.util.zip.ZipFile(zip).use { z ->
-            z.entries().asSequence().filter { !it.isDirectory && it.size in 0..8_000_000 && textFile.matches(it.name) }.take(400).forEach { e ->
-                texts[e.name] = z.getInputStream(e).use { it.readBytes().decodeToString() }
-            }
-        }
-        if (texts.isEmpty() && !zip.name.endsWith(".zip", true)) throw IllegalArgumentException("That isn't a zip file")
-        val addonXml = texts.entries.firstOrNull { it.key.substringAfterLast('/') == "addon.xml" }?.value
-        val name = addonXml?.let { Regex("<addon[^>]*\\bname=\"([^\"]+)\"").find(it)?.groupValues?.get(1) } ?: zip.nameWithoutExtension
-        val id = addonXml?.let { Regex("<addon[^>]*\\bid=\"([^\"]+)\"").find(it)?.groupValues?.get(1) } ?: zip.nameWithoutExtension
-
-        // 1. Playlists inside the zip: saved as files and added.
-        val dir = File(AppDirs.data, "livetv/kodi").apply { mkdirs() }
-        val embedded = texts.filter { (path, body) -> path.endsWith(".m3u", true) || path.endsWith(".m3u8", true) || body.trimStart().startsWith("#EXTM3U") }
-            .filter { (_, body) -> body.lines().count { it.trimStart().startsWith("#EXTINF", true) } >= 2 }
-        // 2. Addresses mentioned anywhere (settings defaults, Python constants, JSON).
-        val urls = texts.values.flatMap { urlPattern.findAll(it).map { m -> m.value.trimEnd('.', ',', ';', '\'', '"') } }.distinct()
-        val guides = urls.filter { u -> val l = u.lowercase(); (l.contains("epg") || l.contains("xmltv") || l.contains("guide")) && !l.contains("addons.xml") && !l.contains(".m3u") }
-        val playlists = urls.filter { u ->
-            val l = u.lowercase().substringBefore('#')
-            l.substringBefore('?').endsWith(".m3u") || (l.contains("get.php") && l.contains("username=")) ||
-                (l.substringBefore('?').endsWith(".m3u8") && Regex("playlist|list|channels|iptv|index|tv").containsMatchIn(l.substringAfterLast('/')))
-        }.sortedBy { if (it.lowercase().substringBefore('?').endsWith(".m3u")) 0 else 1 }.take(8)
-        val guide = guides.firstOrNull()
-
-        val added = mutableListOf<Pair<LiveTv.Source, Int>>()
-        embedded.entries.forEachIndexed { i, (path, body) ->
-            val file = File(dir, "${id.replace(Regex("[^\\w.-]"), "_")}-$i.m3u").apply { writeText(body) }
-            runCatching { LiveTv.add(LiveTv.Kind.M3U, file.toURI().toString(), if (embedded.size > 1) "$name (${path.substringAfterLast('/')})" else name, guide) }
-                .onSuccess { added += it }
-        }
-        for (u in playlists) {
-            runCatching { LiveTv.add(LiveTv.Kind.M3U, u, if (added.isEmpty()) name else "$name ${added.size + 1}", guide) }
-                .onSuccess { added += it }
-                .onFailure { System.err.println("W/kodi: $u: ${it.message}") }
-        }
-        if (added.isEmpty()) {
-            throw IllegalArgumentException("“$name” has no IPTV playlist inside. It's a Kodi program (Python) that only runs inside Kodi. " +
-                "If its website gives you an M3U playlist address or an Xtream Codes login, add that instead.")
-        }
-        Result(name, added)
-    }
-}

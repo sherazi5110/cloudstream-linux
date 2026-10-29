@@ -194,7 +194,7 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
             sources.isEmpty() -> {
                 chips.isVisible = false
                 body.children.setAll(emptyState(Icons.TV, "Add a Live TV source",
-                    "Add an IPTV playlist (M3U, the kind Kodi uses), an Xtream Codes login, or a Stremio / Nuvio TV add-on. " +
+                    "Add an IPTV playlist (M3U), an Xtream Codes login, or a Stremio / Nuvio TV add-on. " +
                         "Live TV sources only show here, never on Home.",
                     if (com.lagradost.cloudstream3.linux.Profiles.isKids) null
                     else button("Add a source", Icons.ADD, "btn-accent") { Nav.window.openSettings("livetv") }))

@@ -682,9 +682,8 @@ class SettingsPage : StackPane(), Refreshable {
     // ---------- Live TV sources ----------
 
     private fun liveTv(): List<Node> {
-        // null = a Kodi add-on zip
-        val kinds = listOf(LiveTv.Kind.STREMIO to "Stremio / Nuvio add-on", LiveTv.Kind.M3U to "M3U playlist (Kodi IPTV)", null to "Kodi add-on (.zip)", LiveTv.Kind.XTREAM to "Xtream Codes login")
-        var kind: LiveTv.Kind? = LiveTv.Kind.M3U
+        val kinds = listOf(LiveTv.Kind.STREMIO to "Stremio / Nuvio add-on", LiveTv.Kind.M3U to "M3U playlist", LiveTv.Kind.XTREAM to "Xtream Codes login")
+        var kind = LiveTv.Kind.M3U
         val url = TextField().apply { HBox.setHgrow(this, Priority.ALWAYS) }
         val epg = TextField().apply { promptText = "TV guide (XMLTV) address, optional, e.g. https://…/guide.xml.gz"; HBox.setHgrow(this, Priority.ALWAYS) }
         val user = TextField().apply { promptText = "Username"; HBox.setHgrow(this, Priority.ALWAYS) }
@@ -709,17 +708,6 @@ class SettingsPage : StackPane(), Refreshable {
                 }
             }
         }
-        val chooseZip = button("Choose a Kodi add-on zip…", Icons.FOLDER, "btn-accent") {
-            FileChooser().apply {
-                title = "Choose a Kodi add-on (.zip)"
-                extensionFilters += FileChooser.ExtensionFilter("Kodi add-on", "*.zip")
-            }.showOpenDialog(scene.window)?.let { file ->
-                runAdd {
-                    val r = com.lagradost.cloudstream3.linux.KodiAddons.import(file)
-                    "${r.name}: added ${r.added.size} source(s), ${r.added.sumOf { it.second }} channels. They're in Live TV."
-                }
-            }
-        }
         val chooseFile = button("Choose file…", Icons.FILE, "btn-ghost") {
             FileChooser().apply {
                 title = "Choose an M3U playlist"
@@ -731,21 +719,19 @@ class SettingsPage : StackPane(), Refreshable {
                 LiveTv.Kind.STREMIO -> "Add-on address: https://…/manifest.json or stremio://…"
                 LiveTv.Kind.M3U -> "Playlist address (…/playlist.m3u), or choose a file"
                 LiveTv.Kind.XTREAM -> "Server address, e.g. http://provider.example:8080"
-                null -> ""
             }
             row.children.setAll(when (kind) {
-                null -> listOf(chooseZip, label("Finds the M3U playlists, TV guides and Xtream links inside an IPTV add-on (e.g. one made for Kodi's IPTV Simple client).", "muted", "small").apply { isWrapText = true; HBox.setHgrow(this, Priority.ALWAYS) })
                 LiveTv.Kind.M3U -> listOf(url, chooseFile, add)
                 else -> listOf(url, add)
             })
             extra.children.setAll(when (kind) {
-                LiveTv.Kind.STREMIO, null -> emptyList()
+                LiveTv.Kind.STREMIO -> emptyList()
                 LiveTv.Kind.M3U -> listOf(hbox(10.0, epg, name))
                 LiveTv.Kind.XTREAM -> listOf(hbox(10.0, user, pass, name))
             })
         }
         add = button("Add source", Icons.ADD, "btn-accent") {
-            val k = kind ?: return@button
+            val k = kind
             runAdd {
                 val (source, count) = LiveTv.add(k, url.text, name.text, epg.text, user.text, pass.text)
                 "Added ${source.name}: $count channels. They're in Live TV."
@@ -775,8 +761,7 @@ class SettingsPage : StackPane(), Refreshable {
         }
         return listOf(
             label("Sources added here appear only in Live TV, never on Home or in Search. Works with Stremio and Nuvio TV add-ons, " +
-                "the M3U / XMLTV playlists Kodi's IPTV Simple client uses (by address, file, or from inside a Kodi add-on zip), and Xtream Codes logins. " +
-                "Kodi add-ons that are Python programs can't run outside Kodi; their zip is searched for playlists instead.", "muted").apply { isWrapText = true; maxWidth = 860.0 },
+                "M3U playlists with optional XMLTV TV guides (by address or as a file), and Xtream Codes logins from IPTV providers.", "muted").apply { isWrapText = true; maxWidth = 860.0 },
             vbox(10.0, label("ADD A SOURCE", "section-label"), form),
             vbox(10.0, label("YOUR LIVE TV SOURCES", "section-label"), list),
             section("Options",

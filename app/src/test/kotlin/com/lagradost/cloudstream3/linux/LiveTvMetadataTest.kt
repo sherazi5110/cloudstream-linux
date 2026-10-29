@@ -61,7 +61,7 @@ class LiveTvMetadataTest {
         val channels = LiveTv.channels(source.id)
         assertEquals(listOf("News 24", "Sport One", "Cartoon Fun", "Movie Max", "Planet Docs"), channels.map { it.name })
         assertEquals(listOf("News", "Sports", "Kids", "Movies", "Documentary"), channels.map { it.group })
-        // Kodi "url|Header=value" and #EXTVLCOPT referrer both become request headers.
+        // "url|Header=value" and #EXTVLCOPT referrer both become request headers.
         assertEquals("demo", channels[0].headers["X-CS-Token"])
         assertTrue(channels[0].url.endsWith("/hls/master.m3u8"))
         assertEquals("$base/", channels[3].headers["Referer"])
@@ -93,32 +93,15 @@ class LiveTvMetadataTest {
     }
 
     @Test
-    fun `Kodi add-on zips, playlist files, web pages and channel logos`() = runBlocking {
-        val dir = kotlin.io.path.createTempDirectory("kodi").toFile()
-        fun zip(name: String, files: Map<String, String>) = File(dir, name).apply {
-            java.util.zip.ZipOutputStream(outputStream()).use { z -> files.forEach { (path, text) -> z.putNextEntry(java.util.zip.ZipEntry(path)); z.write(text.toByteArray()); z.closeEntry() } }
+    fun `playlist files, web pages and channel logos`() = runBlocking {
+        // A playlist file on this computer.
+        val file = File.createTempFile("channels", ".m3u").apply {
+            writeText("#EXTM3U\n#EXTINF:-1 group-title=\"News\",One\n$base/hls/master.m3u8\n#EXTINF:-1,Two\n$base/hls/master.m3u8\n")
+            deleteOnExit()
         }
-        // An IPTV Simple–style add-on: the playlist and guide addresses are settings defaults.
-        val withUrls = zip("pvr.test.zip", mapOf(
-            "pvr.test/addon.xml" to """<addon id="pvr.test" name="Test IPTV" version="1.0"><extension point="xbmc.addon.metadata"><website>https://example.org/addons.xml</website></extension></addon>""",
-            "pvr.test/resources/settings.xml" to """<settings><setting id="m3uUrl" default="$base/iptv/playlist.m3u"/><setting id="epgUrl" default="$base/iptv/guide.xml"/></settings>""",
-        ))
-        val r1 = KodiAddons.import(withUrls)
-        assertEquals("Test IPTV", r1.name)
-        assertEquals(5, r1.added.single().second)
-        assertEquals("$base/iptv/guide.xml", r1.added.single().first.epgUrl)
-        // A playlist inside the zip.
-        val embedded = zip("plugin.embedded.zip", mapOf(
-            "plugin.embedded/addon.xml" to """<addon id="plugin.embedded" name="Embedded"/>""",
-            "plugin.embedded/resources/channels.m3u" to "#EXTM3U\n#EXTINF:-1 group-title=\"News\",One\n$base/hls/master.m3u8\n#EXTINF:-1,Two\n$base/hls/master.m3u8\n",
-        ))
-        val r2 = KodiAddons.import(embedded)
-        assertEquals(2, r2.added.single().second)
-        assertTrue(r2.added.single().first.url.startsWith("file:"))
-        // A Python-only add-on: a clear error.
-        val python = zip("plugin.video.x.zip", mapOf("plugin.video.x/addon.xml" to """<addon id="plugin.video.x" name="Some Plugin"/>""", "plugin.video.x/main.py" to "import xbmc"))
-        val err = runCatching { KodiAddons.import(python) }.exceptionOrNull()?.message.orEmpty()
-        assertTrue("Some Plugin" in err && "only runs inside Kodi" in err, err)
+        val (local, n) = LiveTv.add(LiveTv.Kind.M3U, file.toURI().toString())
+        assertEquals(2, n)
+        assertEquals(file.nameWithoutExtension, local.name)
 
         // Web pages aren't playlists; GitHub page links become raw file links.
         val page = runCatching { LiveTv.add(LiveTv.Kind.M3U, "$base/webpage") }.exceptionOrNull()?.message.orEmpty()
@@ -132,7 +115,6 @@ class LiveTvMetadataTest {
         assertEquals(listOf("$base/media/poster.png"), ChannelLogos.candidates(news))
         val cartoon = LiveTv.Channel("k2", "s", "Cartoon Fun Kids [Geo-blocked]", "http://broken/logo.png", "Kids", "u")
         assertEquals(listOf("http://broken/logo.png", "$base/media/ep_1.jpg"), ChannelLogos.candidates(cartoon))
-        dir.deleteRecursively()
         Unit
     }
 

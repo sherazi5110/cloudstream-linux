@@ -41,9 +41,7 @@ object Screenshots {
             capture(window, "$prefix-livetv-logos.png")
             window.openSettings("livetv")
             delay(1000)
-            window.lookupAll(".chip").firstOrNull { (it as? javafx.scene.control.Label)?.text == "Kodi add-on (.zip)" }?.let { javafx.event.Event.fireEvent(it, click()) }
-            delay(800)
-            capture(window, "$prefix-settings-kodi.png")
+            capture(window, "$prefix-settings-livetv.png")
             com.lagradost.cloudstream3.linux.LiveTv.saved().forEach { com.lagradost.cloudstream3.linux.LiveTv.remove(it.id) }
             System.exit(0)
         }
