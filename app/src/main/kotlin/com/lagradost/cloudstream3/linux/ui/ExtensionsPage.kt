@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.linux.PluginManager
 import com.lagradost.cloudstream3.linux.PluginWrapper
 import com.lagradost.cloudstream3.linux.RepositoryData
 import com.lagradost.cloudstream3.linux.RepositoryManager
+import com.lagradost.cloudstream3.linux.LiveTv
 import com.lagradost.cloudstream3.linux.StremioAddons
 import com.lagradost.cloudstream3.linux.StremioApi
 import com.lagradost.cloudstream3.linux.statusName
@@ -400,9 +401,11 @@ class StremioPane : VBox(18.0) {
             else children += label(m.name.filter { it.isLetterOrDigit() }.take(2).uppercase(), "bold")
             roundedClip(this, 12.0)
         }
-        val catalogs = m.catalogs.count { !it.needsExtra }
+        val catalogs = m.catalogs.count { !it.needsExtra && !LiveTv.isTvType(it.type) }
+        val tv = m.catalogs.any { LiveTv.isTvType(it.type) }
         val tags = hbox(6.0, *listOfNotNull(
             if (catalogs > 0) label("$catalogs catalogs", "tag") else null,
+            if (tv) label("Live TV channels", "tag", "accent").tooltip("Its TV channels are in Live TV") else null,
             if (m.catalogs.any { it.searchable }) label("Search", "tag") else null,
             if (m.resources.any { it.name == "meta" }) label("Details", "tag") else null,
             if (m.resources.any { it.name == "stream" }) label("Streams", "tag", "accent") else null,

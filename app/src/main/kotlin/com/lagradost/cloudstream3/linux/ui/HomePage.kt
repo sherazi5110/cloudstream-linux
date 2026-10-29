@@ -46,15 +46,12 @@ fun backdrop(url: String?, headers: Map<String, String>? = null, darkness: Doubl
 
 /**
  * Home: a full-width featured banner under the top bar, then Continue Watching and the
- * catalogs. The top bar's sections (Movies, Series…) narrow it to extensions and titles of
- * those types; its source picker chooses one extension or the combined feed.
+ * catalogs. The source picker in the top bar chooses one extension or the combined feed.
  */
 class HomePage : StackPane(), Refreshable, TopBarActions {
     /** One extension, or the combined feed. */
     private data class Source(val key: String, val label: String, val apis: List<MainAPI>)
 
-    var section: Section = Section.of(Settings.homeSection)
-        private set
     private val heroHolder = StackPane().apply { minWidth = 0.0 }
     private val body = VBox(34.0).apply { pad(0.0, 40.0, 48.0, 40.0) }
     private val scroll = pageScroll(VBox(heroHolder, body))
@@ -97,14 +94,6 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
         hero?.resume()
     }
 
-    fun setSection(s: Section) {
-        if (s == section) return
-        section = s
-        Settings.homeSection = s.name
-        refreshProviders(force = true)
-        scroll.vvalue = 0.0
-    }
-
     private fun showSourceMenu() {
         val rows = sources.map { src ->
             Popover.row(if (src.key == FEED) icon(Icons.APPS, 18.0) else label(src.label.filter { it.isLetterOrDigit() }.take(2).uppercase(), "provider-badge", "small-badge"),
@@ -117,7 +106,7 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
     }
 
     private fun refreshProviders(force: Boolean = false) {
-        val fresh = Engine.providers().filter { it.hasMainPage && section.matches(it) }
+        val fresh = Engine.providers().filter { it.hasMainPage }
         val feed = Catalogs.feedProviders(fresh).takeIf { Catalogs.multiFeed && it.isNotEmpty() }
         val fresher = listOfNotNull(feed?.let { Source(FEED, "My feed", it) }) + fresh.map { Source(it.name, it.name, listOf(it)) }
         if (!force && fresher == sources && current != null) return
@@ -148,7 +137,7 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
         job = ui.launch {
             val mixed = source.apis.size > 1
             Engine.home(source.apis).collect { row ->
-                val items = row.list.list.filter(section::matches)
+                val items = row.list.list
                 if (items.isEmpty()) return@collect
                 // Feature the first items of the first catalog, whichever order catalogs arrive in.
                 if (row.order < heroIndex) {
@@ -168,9 +157,8 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
         val items = Library.continueWatching()
         continueShelf = if (items.isEmpty()) null else Shelf("Continue Watching").apply {
             items.take(20).forEach { e ->
-                add(WideCard(e.name, e.episodeLabel ?: "${(e.duration - e.position).div(60).toInt()} min left", e.posterUrl, e.progress) {
-                    Nav.open(e.apiName, e.url, e.name, e.posterUrl)
-                })
+                add(WideCard(e.name, e.episodeLabel ?: "${(e.duration - e.position).div(60).toInt()} min left", e.posterUrl, e.progress,
+                    continueActions(e)) { Nav.open(e.apiName, e.url, e.name, e.posterUrl) })
             }
         }
         render()
@@ -182,9 +170,6 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
         when {
             noProviders && Profiles.isKids -> nodes += emptyState(Icons.FACE, "Nothing here yet",
                 "Ask a grown-up to allow some extensions for this profile (Manage profiles → edit → Allowed extensions).")
-            noProviders && section != Section.HOME -> nodes += emptyState(Icons.EXTENSION, "No ${section.label.lowercase()} extensions",
-                "None of your extensions offers ${section.label.lowercase()}.",
-                button("Show everything", Icons.HOME, "btn-accent") { Nav.window.showSection(Section.HOME) })
             noProviders -> nodes += emptyState(
                 Icons.EXTENSION, "No extensions yet",
                 "Add a CloudStream repository or a Stremio add-on to fill your home screen. CloudStream repositories for Android work here unchanged.",
@@ -210,7 +195,7 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
             nodes += if (all.isNotEmpty() && all.all { Catalogs.enabled(it).isEmpty() }) emptyState(Icons.TUNE, "All catalogs are hidden",
                 "You turned off every catalog for ${current?.label}.",
                 button("Customize", Icons.TUNE, "btn-accent") { Nav.window.showOverlay(HomeManager(providers, all.singleOrNull())) })
-            else emptyState(Icons.INFO, "Nothing here", "${current?.label} returned no ${if (section == Section.HOME) "home sections" else section.label.lowercase()}. Its site may be down or blocked — try Settings → Network & DNS, or use Search.")
+            else emptyState(Icons.INFO, "Nothing here", "${current?.label} returned no home sections. Its site may be down or blocked — try Settings → Network & DNS, or use Search.")
         }
         body.children.setAll(nodes)
         javafx.application.Platform.runLater { updateTopBar() }
@@ -218,7 +203,7 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
 
     private fun shelf(row: Engine.HomeSection, mixed: Boolean): Node {
         val (_, api, section, list) = row
-        return Shelf(list.name, onViewAll = { Nav.window.push(GridPage(api, list.name, section, list.list, this.section)) },
+        return Shelf(list.name, onViewAll = { Nav.window.push(GridPage(api, list.name, section, list.list)) },
             trailing = if (mixed) label(api.name, "tag") else null).apply {
             list.list.forEach { item -> add(PosterCard.of(item) { Nav.open(api, item) }) }
         }
@@ -231,6 +216,8 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
         private val details = object : LinkedHashMap<String, com.lagradost.cloudstream3.LoadResponse>(32, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, com.lagradost.cloudstream3.LoadResponse>) = size > 40
         }
+        /** TMDB etc. for featured titles whose extension lacks artwork. */
+        private val extras = java.util.concurrent.ConcurrentHashMap<String, com.lagradost.cloudstream3.linux.Metadata.Info>()
     }
 
     /**
@@ -289,6 +276,11 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
                 synchronized(details) { details[item.url] = r }
                 // Upgrade the slide on screen in place.
                 if (items.getOrNull(index)?.url == item.url) slides.children.setAll(slide(index))
+                val m = com.lagradost.cloudstream3.linux.Metadata
+                if (m.hasTmdb || m.cinemeta || m.anilist) {
+                    runCatching { m.details(r) }.getOrNull()?.let { extras[item.url] = it }
+                    if (items.getOrNull(index)?.url == item.url && extras[item.url] != null) slides.children.setAll(slide(index))
+                }
             }
         }
 
@@ -327,12 +319,14 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
         private fun slide(i: Int): Node {
             val item = items[i]
             val r = synchronized(details) { details[item.url] }
-            val wide = r?.backgroundPosterUrl
+            val ex = extras[item.url]
+            val art = com.lagradost.cloudstream3.linux.Metadata.artwork
+            val wide = r?.backgroundPosterUrl ?: ex?.backdrop?.takeIf { art }
             val layers = mutableListOf<Node>()
             if (wide != null) {
                 // The backdrop covers the banner (like CSS background-size: cover), anchored top right.
                 val view = ImageView()
-                Images.load(view, wide, 1600.0, 900.0, r.posterHeaders)
+                Images.load(view, wide, 1600.0, 900.0, r?.posterHeaders?.takeIf { r.backgroundPosterUrl != null })
                 val holder = StackPane(view).apply { minWidth = 0.0; minHeight = 0.0; alignment = Pos.TOP_RIGHT; isMouseTransparent = true }
                 val cover = javafx.beans.binding.Bindings.createDoubleBinding({
                     maxOf(holder.width, holder.height * 16 / 9)
@@ -348,7 +342,7 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
             layers += Region().apply { styleClass += "hero-shade-top"; isMouseTransparent = true }
 
             val source = hbox(8.0, Logo(22.0), label(api.name, "hero-source"))
-            val title: Node = r?.logoUrl?.let { logo ->
+            val title: Node = (r?.logoUrl ?: ex?.logo?.takeIf { art })?.let { logo ->
                 val view = ImageView().apply { isPreserveRatio = true; fitWidth = 460.0; fitHeight = 150.0 }
                 view.image = javafx.scene.image.Image(logo, 920.0, 300.0, true, true, true)
                 StackPane(view).apply { alignment = Pos.BOTTOM_LEFT; maxWidth = 460.0; minHeight = 90.0 }
@@ -364,12 +358,16 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
                     episodes != null && episodes.size > 1 -> children += label("${episodes.size} Episodes", "hero-meta-item")
                     (r?.duration ?: 0) > 0 -> children += label(r!!.duration!!.let { d -> if (d >= 60) "${d / 60}h ${d % 60}m" else "${d}m" }, "hero-meta-item")
                 }
-                r?.contentRating?.takeIf { it.isNotBlank() }?.let { children += label(it, "hero-rating") }
-                (r?.score ?: item.score)?.toDouble(10)?.takeIf { it > 0 }?.let { children += label("★ %.1f".format(it), "hero-meta-item") }
+                (r?.contentRating ?: ex?.contentRating)?.takeIf { it.isNotBlank() }?.let { children += label(it, "hero-rating") }
+                when {
+                    ex?.tmdbVote != null -> children += label("TMDB %.1f".format(ex.tmdbVote), "hero-meta-item")
+                    ex?.imdbRating != null -> children += label("IMDb %.1f".format(ex.imdbRating), "hero-meta-item")
+                    else -> (r?.score ?: item.score)?.toDouble(10)?.takeIf { it > 0 }?.let { children += label("★ %.1f".format(it), "hero-meta-item") }
+                }
                 if (children.isEmpty()) type?.let { children += label(typeName(it), "hero-meta-item") }
             }
             val rank = hbox(10.0, icon(Icons.TV, 22.0).apply { styleClass += "text-icon" }, label("#${i + 1} in $rowName", "hero-rank"))
-            val plot = r?.plot?.takeIf { it.isNotBlank() }?.let { label(it, "hero-plot").apply { isWrapText = true; maxWidth = 560.0; maxHeight = 72.0 } }
+            val plot = (r?.plot?.takeIf { it.isNotBlank() } ?: ex?.overview)?.let { label(it, "hero-plot").apply { isWrapText = true; maxWidth = 560.0; maxHeight = 72.0 } }
             val play = button("Play", Icons.PLAY, "hero-play") { play(item, r) }
             val info = button("More Info", Icons.INFO, "hero-info") { Nav.open(api, item) }
             val text = vbox(16.0, *listOfNotNull(source, title, meta, rank, plot, hbox(12.0, play, info).pad(6.0, 0.0, 0.0, 0.0)).toTypedArray()).apply {
@@ -415,7 +413,6 @@ class GridPage(
     title: String,
     private val section: MainPageData,
     first: List<SearchResponse>,
-    private val filter: Section = Section.HOME,
 ) : StackPane(), Disposable {
     private val grid = FlowPane(18.0, 22.0)
     private var page = 1
@@ -472,7 +469,7 @@ class GridPage(
                 return@launch
             }
             page++
-            val added = response.items.flatMap { it.list }.filter { ContentFilter.allows(it) && filter.matches(it) }.count { add(it) }
+            val added = response.items.flatMap { it.list }.filter(ContentFilter::allows).count { add(it) }
             // Done when the page was empty, said so, or only repeated what we already have.
             finished = added == 0 || !response.hasNext
             idle()
@@ -489,3 +486,21 @@ class GridPage(
         job?.cancel()
     }
 }
+
+/** ✓ mark watched, ✕ remove, ⋯ more: the hover buttons on a Continue Watching card. */
+fun continueActions(e: com.lagradost.cloudstream3.linux.WatchEntry): List<CardAction> = listOf(
+    CardAction(Icons.CHECK, "Mark as watched") {
+        Library.markWatched(e); Toasts.show("Marked ${e.episodeLabel ?: e.name} as watched")
+    },
+    CardAction(Icons.CLOSE, "Remove from Continue Watching") {
+        Library.removeHistory(e.apiName, e.url); Toasts.show("Removed ${e.name} from Continue Watching")
+    },
+    CardAction(Icons.MORE, "More") { anchor ->
+        Popover.show(anchor, Popover.panel(
+            Popover.row(icon(Icons.CHECK, 18.0), "Mark as watched") { Library.markWatched(e) },
+            Popover.row(icon(Icons.CLOSE, 18.0), "Remove from Continue Watching") { Library.removeHistory(e.apiName, e.url) },
+            Popover.separator(),
+            Popover.row(icon(Icons.INFO, 18.0), "Details") { Nav.open(e.apiName, e.url, e.name, e.posterUrl) },
+        ))
+    },
+)

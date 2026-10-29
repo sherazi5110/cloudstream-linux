@@ -2,7 +2,10 @@
 
 Run **CloudStream extensions and Stremio add-ons on Ubuntu/Linux**, from the same repositories the Android app uses, with no changes to the extensions.
 
-- **New look (6.0):** a slim icon rail, a top bar with sections (Home, Movies, Series, Anime…), search and your profile, and a full-width featured banner with backdrop, rating, "#1 in …", plot, *Play* and *More Info*. A new logo whose letters follow your theme colour.
+- **New look (6.0):** a slim icon rail, a clean top bar (source picker, search, your profile) and a full-width featured banner with backdrop, rating, "#1 in …", plot, *Play* and *More Info*. A new logo whose letters follow your theme colour.
+- **Live TV (6.0.1):** a Live TV page of its own (below Home in the rail) for IPTV: **M3U playlists with XMLTV guides** (what Kodi's IPTV Simple client uses), **Xtream Codes** logins, and **Stremio / Nuvio TV add-ons** (add-ons with TV channel catalogs move here automatically). What's on now and next, categories from the playlist's groups, favourites, recently watched, channel search and a country filter. Live TV sources never appear on Home.
+- **Metadata & integrations (6.0.1):** add your free **TMDB** API key for ratings on posters, wide backdrops and title logos, cast with photos, trailers and similar titles on every extension; **IMDb ratings via Cinemeta** and **AniList** scores for anime need no key.
+- **Watched controls (6.0.1):** mark films and episodes as watched (or not), and remove titles from Continue Watching, right from the card, My list, history or the title page.
 - **Profiles:** "Who's watching?", twelve built-in avatars in eight colours (or your own picture), an optional PIN, and each profile's own history, list, home layout, theme and player settings.
 - **Kids profiles:** only the extensions you allow (NSFW never), chosen types (e.g. cartoons and anime), a maximum age rating and blocked words; no Settings or Extensions pages, and a PIN keeps grown-up profiles locked.
 - **Stremio add-ons:** install any add-on by its manifest address (or `stremio://` link). Its catalogs appear on Home, in Search and in the catalog editor; details come from the add-on or Cinemeta; streams from every add-on that has them play in the built-in player (torrent-only add-ons aren't supported).
@@ -30,7 +33,9 @@ Run **CloudStream extensions and Stremio add-ons on Ubuntu/Linux**, from the sam
 | ![Home](docs/screenshots/home.png) | ![Who's watching](docs/screenshots/profiles.png) |
 | ![Profile editor](docs/screenshots/profile-editor.png) | ![Kids profile settings](docs/screenshots/profile-editor-kids.png) |
 | ![Kids home](docs/screenshots/kids-home.png) | ![Stremio add-ons](docs/screenshots/addons.png) |
-| ![Movies section](docs/screenshots/section-movies.png) | ![Source menu](docs/screenshots/source-menu.png) |
+| ![Live TV](docs/screenshots/livetv.png) | ![Live TV sources](docs/screenshots/settings-livetv.png) |
+| ![Metadata & integrations](docs/screenshots/settings-metadata.png) | ![Title page with TMDB](docs/screenshots/details-tmdb.png) |
+| ![Continue Watching actions](docs/screenshots/continue-menu.png) | ![Source menu](docs/screenshots/source-menu.png) |
 | ![Liquid glass](docs/screenshots/theme-glass.png) | ![Details](docs/screenshots/details.png) |
 | ![Player](docs/screenshots/player.png) | ![Sources in the player](docs/screenshots/player-sources.png) |
 | ![Online subtitles](docs/screenshots/player-online.png) | ![Subtitle on screen](docs/screenshots/player-subtitle.png) |

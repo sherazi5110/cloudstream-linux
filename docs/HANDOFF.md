@@ -43,7 +43,7 @@ Read this first when continuing work on CloudStream for Linux.
      extension says `hasNext = false` (Demo's "Endless catalog" has 4 pages for testing). **Posters on slow
      connections** (`Images`): disk cache read without waiting for a download slot, 12 slots, posters that left
      the screen give their slot up, TMDB images fetched at the shown width, one retry, shorter timeouts.
-- Tests: `./gradlew test`, 19 tests, all passing (libVLC must be installed for the playback test).
+- Tests: `./gradlew test`, 22 tests, all passing (libVLC must be installed for the playback test).
 
 ## How the owner works
 
@@ -75,8 +75,8 @@ the subtitles part (OpenSubtitles v3 + Cinemeta). Suggested design:
 
 Not done yet, roughly by value: Cloudflare solver (JavaFX WebView implementing `WebViewResolver`; note
 javafx-web adds a lot of size), downloads for offline viewing, Discord "now watching", AniSkip
-(skip intro), richer details page (redesign like the new Home banner; trailers and similar titles via
-Cinemeta), rename catalog rows, UI zoom, extension tabs with update history, more subtitle providers
+(skip intro), a TV guide grid for Live TV, "wrong match? search TMDB" on the title page, details page
+redesign like the Home banner, rename catalog rows, UI zoom, extension tabs with update history, more subtitle providers
 (SubDL/Subsource need API keys), open a local video file, RPM/AppImage packages.
 
 ## Upkeep (see the owner's question about the app ageing)

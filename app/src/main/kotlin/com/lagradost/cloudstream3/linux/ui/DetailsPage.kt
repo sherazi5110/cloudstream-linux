@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.linux.Bookmark
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.Library
+import com.lagradost.cloudstream3.linux.Metadata
 import com.lagradost.cloudstream3.linux.Settings
 import com.lagradost.cloudstream3.linux.Playable
 import javafx.geometry.Pos
@@ -31,6 +32,8 @@ class DetailsPage(
     private val backdropLayer = StackPane()
     private val content = VBox(30.0).apply { pad(18.0, 40.0, 48.0, 40.0) }
     private var response: LoadResponse? = null
+    /** Extra details from TMDB / Cinemeta / AniList (Settings → Metadata & integrations). */
+    private var info: Metadata.Info? = null
     private var playables: List<Playable> = emptyList()
     private var groupIndex = 0
     private val episodesBox = VBox(18.0)
@@ -76,6 +79,7 @@ class DetailsPage(
                 groupIndex = groups().indexOfFirst { g -> g.second.any { it.data == last?.episodeData } }.coerceAtLeast(0)
                 (r.backgroundPosterUrl ?: r.posterUrl)?.let { backdropLayer.children.setAll(backdrop(it, r.posterHeaders, 0.35)) }
                 render()
+                enrich(r)
             } catch (t: Throwable) {
                 if (t is kotlinx.coroutines.CancellationException) throw t
                 content.children.setAll(topBar(), emptyState(Icons.INFO, "Couldn't open this title", t.message ?: t.toString(),
@@ -120,21 +124,38 @@ class DetailsPage(
             }
     }
 
+    /** Fills in ratings, artwork, cast and similar titles from the metadata services, then re-renders. */
+    private fun enrich(r: LoadResponse) {
+        if (!Metadata.hasTmdb && !Metadata.cinemeta && !Metadata.anilist) return
+        ui.launch {
+            val found = runCatching { Metadata.details(r) }.getOrNull() ?: return@launch
+            if (response !== r) return@launch
+            info = found
+            if (r.backgroundPosterUrl == null && Metadata.artwork) found.backdrop?.let { backdropLayer.children.setAll(backdrop(it, null, 0.35)) }
+            render()
+        }
+    }
+
     private fun render() {
         val r = response ?: return
+        val extra = info
         val meta = listOfNotNull(
             r.type.name,
             r.year?.toString(),
             r.duration?.takeIf { it > 0 }?.let { "${it / 60}h ${it % 60}m".removePrefix("0h ") },
-            r.contentRating,
+            r.contentRating ?: extra?.contentRating,
             if (playables.size > 1) "${playables.size} episodes" else null,
         )
         val tags = hbox(8.0).apply {
-            r.score?.toDouble(10)?.takeIf { it > 0 }?.let { children += label("★ %.1f".format(it), "tag", "accent") }
+            extra?.tmdbVote?.let { children += ratingPill("TMDB", "rating-tmdb", it, extra.tmdbVotes) }
+            extra?.imdbRating?.let { children += ratingPill("IMDb", "rating-imdb", it, null) }
+            extra?.anilistScore?.let { children += ratingPill("AniList", "rating-anilist", it, null) }
+            if (extra?.tmdbVote == null) r.score?.toDouble(10)?.takeIf { it > 0 }?.let { children += label("★ %.1f".format(it), "tag", "accent") }
             meta.forEach { children += label(it, "tag") }
         }
         val genres = FlowPane(8.0, 8.0).apply { r.tags.orEmpty().take(10).forEach { children += label(it, "chip") } }
-        val plot = label(r.plot ?: "No description available.", "muted").apply {
+        val text = (if (Metadata.replaceExtension) extra?.overview ?: r.plot else r.plot ?: extra?.overview)
+        val plot = label(text ?: "No description available.", "muted").apply {
             isWrapText = true; maxWidth = 820.0; style = "-fx-font-size: 14px; -fx-line-spacing: 3;"
         }
 
@@ -147,25 +168,53 @@ class DetailsPage(
             Toasts.show(if (now) "Added to your library" else "Removed from your library")
         }
         playSlot.children.setAll(playButton())
-        val actions = hbox(10.0, playSlot, button("Sources", Icons.MOVIE, "btn-ghost") {
+        val watched = playables.isNotEmpty() && playables.all { Library.isWatched(api.name, it.data) }
+        val watchedButton = button(if (watched) "Watched" else "Mark as watched", if (watched) Icons.CHECK else Icons.CHECK, "btn-ghost") {
+            if (watched) Library.markUnwatched(api.name, url, playables.map { it.data })
+            else Library.markWatched(api.name, url, r.name, r.posterUrl ?: poster, playables.map { it.data to (if (playables.size > 1) it.label else null) })
+            Toasts.show(if (watched) "Marked as not watched" else "Marked as watched")
+            render()
+        }.apply {
+            isDisable = playables.isEmpty()
+            if (watched) styleClass += "active"
+            tooltip(if (watched) "Mark as not watched" else if (playables.size > 1) "Mark every episode as watched" else "Mark as watched")
+        }
+        val trailer = extra?.trailer?.takeIf { Metadata.extras }?.let { t -> button("Trailer", Icons.PLAY_CIRCLE, "btn-ghost") { openUrl(t) }.tooltip("Opens on YouTube") }
+        val actions = hbox(10.0, *listOfNotNull(playSlot, button("Sources", Icons.MOVIE, "btn-ghost") {
             target()?.let { Playback.open(api, r, it, chooseManually = true) }
-        }.apply { isDisable = playables.isEmpty() }, bookmarkButton)
+        }.apply { isDisable = playables.isEmpty() }, trailer, watchedButton, bookmarkButton).toTypedArray())
 
+        val logo = (r.logoUrl ?: extra?.logo?.takeIf { Metadata.artwork })?.let { url ->
+            ImageView(javafx.scene.image.Image(url, 880.0, 280.0, true, true, true)).apply { isPreserveRatio = true; fitWidth = 440.0; fitHeight = 140.0 }
+        }
         val info = vbox(16.0,
-            label(r.name, "h1").apply { isWrapText = true; maxWidth = 820.0 },
+            logo?.let { StackPane(it).apply { alignment = Pos.BOTTOM_LEFT; maxWidth = 440.0 } } ?: label(r.name, "h1").apply { isWrapText = true; maxWidth = 820.0 },
             tags, plot, genres, actions.pad(6.0, 0.0, 0.0, 0.0),
         ).apply { alignment = Pos.BOTTOM_LEFT }
         val header = hbox(36.0, posterNode(r.posterUrl ?: poster, r.posterHeaders ?: posterHeaders), info).apply { alignment = Pos.BOTTOM_LEFT }
 
         val nodes = mutableListOf(topBar(), header)
-        r.actors?.takeIf { it.isNotEmpty() }?.let { actors ->
+        val cast = extra?.cast?.takeIf { it.isNotEmpty() && Metadata.extras }
+        if (cast != null) nodes += vbox(12.0, label("Cast", "h3"), Shelf("").apply {
+            children.removeAt(0) // no second header
+            cast.forEach { p -> add(castCard(p)) }
+        })
+        else r.actors?.takeIf { it.isNotEmpty() }?.let { actors ->
             nodes += vbox(10.0, label("Cast", "h3"), FlowPane(8.0, 8.0).apply {
                 actors.take(14).forEach { a -> children += label(listOfNotNull(a.actor.name, a.roleString).joinToString(" · "), "tag") }
             })
         }
         if (playables.size > 1) nodes += episodesBox.also { renderEpisodes() }
-        r.recommendations?.takeIf { it.isNotEmpty() }?.let { recs ->
+        val recs = r.recommendations.orEmpty()
+        if (recs.isNotEmpty()) {
             nodes += Shelf("More like this").apply { recs.forEach { item -> add(PosterCard.of(item) { Nav.open(api, item) }) } }
+        } else extra?.similar?.takeIf { it.isNotEmpty() && Metadata.extras }?.let { similar ->
+            // From TMDB: opening one searches your extensions for it.
+            nodes += Shelf("More like this", trailing = label("from TMDB · opens a search", "faint", "small")).apply {
+                similar.forEach { s ->
+                    add(PosterCard(s.title, s.poster, topLeft = s.vote?.let { "TMDB %.1f".format(it) }) { Nav.window.search(s.title) })
+                }
+            }
         }
         if (playables.isEmpty()) nodes += emptyState(Icons.INFO, "Nothing to play", "${api.name} didn't list any playable items for this title.")
         content.children.setAll(nodes)
@@ -274,5 +323,26 @@ fun playTarget(apiName: String, url: String, playables: List<Playable>): Playabl
         index < 0 -> playables.firstOrNull()
         last!!.finished -> playables.getOrNull(index + 1) ?: playables[index]
         else -> playables[index]
+    }
+}
+
+private fun ratingPill(name: String, style: String, value: Double, votes: Int?): Node = hbox(7.0,
+    label(name, style), label("%.1f".format(value), "bold"),
+    *listOfNotNull(votes?.let { label(if (it >= 1000) "${it / 1000}k votes" else "$it votes", "faint", "small") }).toTypedArray(),
+).apply { styleClass += "rating-pill"; maxWidth = Region.USE_PREF_SIZE }
+
+/** A round cast photo with name and role. */
+private fun castCard(p: Metadata.Person): Node {
+    val view = ImageView()
+    Images.load(view, p.photo, 92.0, 92.0)
+    val photo = StackPane(view).apply {
+        setMinSize(92.0, 92.0); setMaxSize(92.0, 92.0)
+        styleClass += "cast-photo"
+        clip = javafx.scene.shape.Circle(46.0, 46.0, 46.0)
+        style = "-fx-background-color: -cs-surface-3;"
+        if (p.photo == null) children += label(p.name.split(' ').take(2).joinToString("") { it.take(1) }, "bold")
+    }
+    return vbox(6.0, photo, label(p.name, "cast-name").apply { maxWidth = 104.0 }, label(p.role ?: "", "cast-role").apply { maxWidth = 104.0 }).apply {
+        alignment = Pos.TOP_CENTER; minWidth = 104.0; maxWidth = 104.0
     }
 }

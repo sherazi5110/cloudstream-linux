@@ -9,6 +9,10 @@ Also: /hls/ (an HLS stream that needs an "X-CS-Token: demo" header on every requ
 like token-protected hosts), and /stremio/ stand-ins for the Cinemeta and OpenSubtitles
 addons the player's online subtitle search uses.
 
+/iptv/ (an M3U playlist + XMLTV guide), /xtream/ (an Xtream Codes server), /addon-tv/ (a Stremio
+TV add-on), /tmdb/3/ (TMDB, key "0123456789abcdef0123456789abcdef") and /anilist (GraphQL) are the
+Live TV and metadata stand-ins.
+
 /addon/ is a whole Stremio add-on ("Test Add-on"): manifest, catalogs (with search and
 skip paging), metadata (a film and a series with episodes), streams (with proxy headers,
 plus a torrent-only stream the app must skip) and subtitles.
@@ -35,6 +39,113 @@ FILES = [{"name": "test_film_640.mp4", "format": "h.264", "height": "360"},
          {"name": "test_film.en.srt", "format": "SubRip"}]
 
 class Handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        body = json.loads(self.rfile.read(length) or b"{}")
+        if self.path.startswith("/anilist"):
+            title = body.get("variables", {}).get("s", "")
+            if "pixel" in title.lower():
+                return self.send(200, json.dumps({"data": {"Media": {"averageScore": 84, "bannerImage": None, "description": "Anime <b>Pixel</b>.", "title": {"romaji": "Pikuseru", "english": "Pixel City"}}}}))
+            return self.send(200, json.dumps({"data": {"Media": None}}))
+        return self.send(404, "{}")
+
+    def channels(self):
+        root = f"http://localhost:{self.server.server_port}"
+        return [
+            ("news24", "News 24", "News", "GB", f"{root}/hls/master.m3u8|X-CS-Token=demo"),
+            ("sport1", "Sport One", "Sports", "US", f"{root}/hls/master.m3u8|X-CS-Token=demo"),
+            ("cartoon", "Cartoon Fun", "Kids", "US", f"{root}/hls/master.m3u8|X-CS-Token=demo"),
+            ("movies", "Movie Max", "Movies", "PK", f"{root}/download/night_of_the_test_pattern/test_film_640.mp4"),
+            ("docs", "Planet Docs", "Documentary", "IN", f"{root}/hls/master.m3u8|X-CS-Token=demo"),
+        ]
+
+    def iptv(self, parts):
+        root = f"http://localhost:{self.server.server_port}"
+        if parts == ["playlist.m3u"]:
+            lines = ["#EXTM3U"]
+            for i, (cid, name, group, country, url) in enumerate(self.channels()):
+                lines.append(f'#EXTINF:-1 tvg-id="{cid}" tvg-logo="{root}/media/poster.png" tvg-country="{country}" group-title="{group}",{name}')
+                if cid == "movies":
+                    lines.append(f"#EXTVLCOPT:http-referrer={root}/")
+                lines.append(url)
+            return self.send(200, "\n".join(lines) + "\n", "audio/x-mpegurl")
+        if parts == ["guide.xml"]:
+            now = int(time.time()) // 1800 * 1800
+            fmt = lambda t: time.strftime("%Y%m%d%H%M%S +0000", time.gmtime(t))
+            progs = []
+            for cid, name, *_ in self.channels():
+                for k in range(-1, 5):
+                    start, stop = now + k * 1800, now + (k + 1) * 1800
+                    progs.append(f'<programme start="{fmt(start)}" stop="{fmt(stop)}" channel="{cid}"><title lang="en">{name} show {k + 2}</title><desc>About {name}.</desc></programme>')
+            xml = '<?xml version="1.0" encoding="UTF-8"?><tv>' + "".join(f'<channel id="{c[0]}"><display-name>{c[1]}</display-name></channel>' for c in self.channels()) + "".join(progs) + "</tv>"
+            return self.send(200, xml, "application/xml")
+        return self.send(404, "not found", "text/plain")
+
+    def xtream(self, path, qs):
+        if qs.get("username", [""])[0] != "demo" or qs.get("password", [""])[0] != "secret":
+            return self.send(200, json.dumps({"user_info": {"auth": 0}}))
+        action = qs.get("action", [""])[0]
+        if path.endswith("xmltv.php"):
+            return self.iptv(["guide.xml"])
+        if action == "get_live_categories":
+            return self.send(200, json.dumps([{"category_id": "1", "category_name": "News"}, {"category_id": "2", "category_name": "Kids"}]))
+        if action == "get_live_streams":
+            return self.send(200, json.dumps([{"num": 1, "name": "News 24", "stream_id": 11, "category_id": "1", "epg_channel_id": "news24", "stream_icon": ""},
+                                              {"num": 2, "name": "Cartoon Fun", "stream_id": 12, "category_id": "2", "epg_channel_id": "cartoon", "stream_icon": ""}]))
+        return self.send(200, json.dumps({"user_info": {"auth": 1, "status": "Active"}, "server_info": {}}))
+
+    def addon_tv(self, parts):
+        root = f"http://localhost:{self.server.server_port}"
+        chans = [{"id": f"tvtest:{c[0]}", "type": "tv", "name": c[1], "poster": f"{root}/media/poster.png", "genres": [c[2]]} for c in self.channels()]
+        if parts == ["manifest.json"]:
+            return self.send(200, json.dumps({"id": "org.test.tv", "version": "1.0.0", "name": "Test TV", "types": ["tv"], "idPrefixes": ["tvtest"],
+                "resources": ["catalog", "meta", "stream"], "catalogs": [{"type": "tv", "id": "channels", "name": "Channels", "extra": [{"name": "skip"}]}]}))
+        if len(parts) >= 3 and parts[0] == "catalog":
+            skip = int(parts[3].removesuffix(".json").removeprefix("skip=")) if len(parts) > 3 else 0
+            return self.send(200, json.dumps({"metas": chans[skip:]}))
+        if len(parts) == 3 and parts[0] == "meta":
+            mid = urllib.parse.unquote(parts[2].removesuffix(".json"))
+            meta = next((c for c in chans if c["id"] == mid), None)
+            return self.send(200 if meta else 404, json.dumps({"meta": meta} if meta else {}))
+        if len(parts) == 3 and parts[0] == "stream":
+            return self.send(200, json.dumps({"streams": [{"name": "Test TV", "title": "Live 480p", "url": f"{root}/hls/master.m3u8",
+                                                           "behaviorHints": {"proxyHeaders": {"request": {"X-CS-Token": "demo"}}}}]}))
+        return self.send(404, "{}")
+
+    TMDB_KEY = "0123456789abcdef0123456789abcdef"
+
+    def tmdb(self, path, qs):
+        if qs.get("api_key", [""])[0] != self.TMDB_KEY and self.headers.get("Authorization") != "Bearer test-read-token":
+            return self.send(401, json.dumps({"status_message": "Invalid API key"}))
+        root = f"http://localhost:{self.server.server_port}"
+        movie = {"id": 501, "title": "Night of the Test Pattern", "original_title": "Night of the Test Pattern", "release_date": "1968-10-01",
+                 "vote_average": 7.9, "vote_count": 1234, "backdrop_path": "/backdrop_night_of_the_test_pattern.jpg", "poster_path": "/poster_night_of_the_test_pattern.jpg",
+                 "overview": "TMDB: colour bars rise from their graves.", "media_type": "movie"}
+        show = {"id": 601, "name": "Pixel City", "original_name": "Pixel City", "first_air_date": "2024-01-01", "vote_average": 8.2, "vote_count": 12000,
+                "backdrop_path": "/backdrop_pixel_city.jpg", "poster_path": "/poster_pixel_city.jpg", "overview": "TMDB: a detective chases a missing frame.", "media_type": "tv"}
+        if path == "/configuration":
+            return self.send(200, json.dumps({"images": {}}))
+        if path.startswith("/search/"):
+            q = qs.get("query", [""])[0].lower()
+            hits = [h for h in (movie, show) if q in (h.get("title") or h.get("name")).lower()]
+            if path == "/search/movie": hits = [h for h in hits if h["media_type"] == "movie"]
+            if path == "/search/tv": hits = [h for h in hits if h["media_type"] == "tv"]
+            return self.send(200, json.dumps({"results": hits}))
+        if path.startswith("/find/"):
+            return self.send(200, json.dumps({"movie_results": [movie] if path.endswith("tt9000002") else [], "tv_results": [show] if path.endswith("tt9000001") else []}))
+        full = dict(movie if path.startswith("/movie/") else show)
+        full.update({
+            "external_ids": {"imdb_id": "tt9000002" if path.startswith("/movie/") else "tt9000001"},
+            "images": {"logos": [{"file_path": "/logo.png", "iso_639_1": "en"}]},
+            "credits": {"cast": [{"name": "Ada Scanline", "character": "Detective Vale", "profile_path": "/poster_signal_lost.jpg"},
+                                 {"name": "Vic Raster", "character": "The Editor", "profile_path": None}]},
+            "videos": {"results": [{"site": "YouTube", "type": "Trailer", "official": True, "key": "abc123"}]},
+            "recommendations": {"results": [{"title": "Metropolis Bars", "release_date": "1927-01-01", "poster_path": "/poster_metropolis_bars.jpg", "vote_average": 7.2}]},
+            "release_dates": {"results": [{"iso_3166_1": "US", "release_dates": [{"certification": "PG"}]}]},
+            "content_ratings": {"results": [{"iso_3166_1": "US", "rating": "TV-14"}]},
+        })
+        return self.send(200, json.dumps(full))
+
     def addon(self, parts):
         root = f"http://localhost:{self.server.server_port}"
         def meta(fid, full=False):
@@ -162,6 +273,21 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, srt, "application/x-subrip")
         if parts and parts[0] == "addon":
             return self.addon(parts[1:])
+        if parts and parts[0] == "iptv":
+            return self.iptv(parts[1:])
+        if parts and parts[0] == "xtream":
+            return self.xtream(url.path, qs)
+        if parts and parts[0] == "addon-tv":
+            return self.addon_tv(parts[1:])
+        if parts[:2] == ["tmdb", "3"]:
+            return self.tmdb("/" + "/".join(parts[2:]), qs)
+        if parts[:2] == ["tmdbimg", "w1280"] or (parts and parts[0] == "tmdbimg"):
+            path = os.path.join(MEDIA, os.path.basename(parts[-1]))
+            if os.path.exists(path):
+                return self.send(200, open(path, "rb").read(), "image/png" if path.endswith(".png") else "image/jpeg")
+            return self.send(404, "", "text/plain")
+        if parts[:3] == ["stremio", "meta", "meta"] and len(parts) == 5:
+            return self.send(200, json.dumps({"meta": {"id": parts[4].removesuffix(".json"), "imdbRating": "8.4"}}))
         if url.path == "/slow":
             # A slow extractor: answers after a few seconds.
             time.sleep(float(qs.get("s", ["8"])[0]))

@@ -261,7 +261,8 @@ class BuiltinPlayer(
     }
 
     private fun record() {
-        if (duration <= 0 || position < 5000) return
+        // Live channels have no resume point and don't belong in Continue Watching.
+        if (duration <= 0 || position < 5000 || response.type == com.lagradost.cloudstream3.TvType.Live) return
         val entry = WatchEntry(api.name, response.url, response.name, response.posterUrl, playable.data,
             if (all.size > 1) playable.label else null, position / 1000.0, duration / 1000.0, System.currentTimeMillis())
         ui.launch(Dispatchers.IO) { Library.record(entry) }

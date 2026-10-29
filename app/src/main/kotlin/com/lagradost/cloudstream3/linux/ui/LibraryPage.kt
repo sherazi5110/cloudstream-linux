@@ -16,7 +16,7 @@ class LibraryPage : StackPane(), Refreshable {
     private val body = VBox(20.0)
 
     init {
-        tabs.setItems(listOf("Continue Watching", "My List", "History"))
+        tabs.setItems(listOf("Continue Watching", "My list", "History"))
         children += pageScroll(vbox(22.0, label("Library", "h2"), tabs, body).pad(22.0, 36.0, 40.0, 36.0))
         Library.onChange { ui.launch { if (scene != null) render() } }
     }
@@ -36,7 +36,8 @@ class LibraryPage : StackPane(), Refreshable {
         if (items.isEmpty()) return emptyState(Icons.PLAY, "Nothing in progress", "Titles you start watching show up here so you can resume where you left off.")
         return FlowPane(18.0, 22.0).apply {
             items.forEach { e ->
-                children += WideCard(e.name, listOfNotNull(e.episodeLabel, "${clock(e.position)} / ${clock(e.duration)}").joinToString("  ·  "), e.posterUrl, e.progress) {
+                children += WideCard(e.name, listOfNotNull(e.episodeLabel, "${clock(e.position)} / ${clock(e.duration)}").joinToString("  ·  "), e.posterUrl, e.progress,
+                    continueActions(e)) {
                     Nav.open(e.apiName, e.url, e.name, e.posterUrl)
                 }
             }
@@ -48,7 +49,8 @@ class LibraryPage : StackPane(), Refreshable {
         if (items.isEmpty()) return emptyState(Icons.BOOKMARK_OUTLINE, "Your list is empty", "Use “Add to Library” on any title to keep it here.")
         return FlowPane(18.0, 22.0).apply {
             items.forEach { b ->
-                children += PosterCard(b.name, b.posterUrl, topRight = b.apiName.take(14)) { Nav.open(b.apiName, b.url, b.name, b.posterUrl) }
+                val watched = Library.lastWatched(b.apiName, b.url)?.finished == true
+                children += PosterCard(b.name, b.posterUrl, topLeft = if (watched) "✓ Watched" else null, topRight = b.apiName.take(14)) { Nav.open(b.apiName, b.url, b.name, b.posterUrl) }
             }
         }
     }
@@ -62,7 +64,13 @@ class LibraryPage : StackPane(), Refreshable {
                 label(format.format(Instant.ofEpochMilli(e.updatedAt)), "faint", "small").apply { minWidth = 92.0 },
                 vbox(2.0, label(e.name, "bold"), label(listOfNotNull(e.episodeLabel, e.apiName).joinToString("  ·  "), "muted", "small")),
                 spacer(),
-                progressBar(e.progress, 120.0),
+                if (e.finished) label("✓ Watched", "watched-badge") else progressBar(e.progress, 120.0),
+                button(null, if (e.finished) Icons.REPLAY_10 else Icons.CHECK, "btn-ghost", "btn-small") {
+                    if (e.finished) Library.markUnwatched(e.apiName, e.url, listOf(e.episodeData)) else Library.markWatched(e)
+                }.apply {
+                    tooltip(if (e.finished) "Mark as not watched" else "Mark as watched")
+                    addEventHandler(javafx.scene.input.MouseEvent.MOUSE_CLICKED) { it.consume() }
+                },
                 button(null, Icons.DELETE, "btn-ghost", "btn-small") { Library.removeHistory(e.apiName, e.url) }.apply {
                     tooltip("Remove from history")
                     addEventHandler(javafx.scene.input.MouseEvent.MOUSE_CLICKED) { it.consume() }

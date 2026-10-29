@@ -1,10 +1,5 @@
 package com.lagradost.cloudstream3.linux.ui
 
-import com.lagradost.cloudstream3.MainAPI
-import com.lagradost.cloudstream3.SearchResponse
-import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.linux.Engine
-import com.lagradost.cloudstream3.linux.PluginManager
 import com.lagradost.cloudstream3.linux.Profiles
 import javafx.geometry.Insets
 import javafx.geometry.Pos
@@ -16,39 +11,13 @@ import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import kotlinx.coroutines.launch
 
-/** Home's sections in the top bar. Each shows the extensions (and items) of its types. */
-enum class Section(val label: String, val types: Set<TvType>?) {
-    HOME("Home", null),
-    MOVIES("Movies", setOf(TvType.Movie, TvType.AnimeMovie, TvType.Torrent)),
-    SERIES("Series", setOf(TvType.TvSeries, TvType.AsianDrama)),
-    ANIME("Anime", setOf(TvType.Anime, TvType.AnimeMovie, TvType.OVA)),
-    CARTOONS("Cartoons", setOf(TvType.Cartoon)),
-    DOCS("Documentaries", setOf(TvType.Documentary)),
-    LIVE("Live TV", setOf(TvType.Live));
-
-    fun matches(api: MainAPI) = types == null || api.supportedTypes.any { it in types }
-
-    /** Items without a type are kept: many extensions don't set one. */
-    fun matches(item: SearchResponse) = types == null || item.type == null || item.type in types
-
-    companion object {
-        fun of(name: String) = entries.firstOrNull { it.name == name } ?: HOME
-
-        /** Sections that at least one usable extension serves. */
-        fun available(): List<Section> {
-            val apis = Engine.providers().filter { it.hasMainPage }
-            return entries.filter { it == HOME || apis.any(it::matches) }
-        }
-    }
-}
-
 /**
- * The bar across the top: sections on the left; page controls, search and the profile on
- * the right. Transparent over Home's banner, solid once something scrolls beneath it.
+ * The bar across the top: the page's own controls on the left (Home's source picker,
+ * Live TV's source and search), then search and the profile. Transparent over a banner,
+ * solid once something scrolls beneath it.
  */
 class TopBar(private val window: AppWindow) : StackPane() {
-    private val sections = HBox(4.0).apply { alignment = Pos.CENTER_LEFT }
-    private val actions = HBox(10.0).apply { alignment = Pos.CENTER_RIGHT }
+    private val actions = HBox(10.0).apply { alignment = Pos.CENTER_LEFT }
     private val search = button("Search", Icons.SEARCH, "topbar-search") {
         window.show(Tab.SEARCH)
         (window.lookup(".search-field") as? javafx.scene.control.TextField)?.requestFocus()
@@ -60,38 +29,25 @@ class TopBar(private val window: AppWindow) : StackPane() {
     init {
         styleClass += "topbar"
         minHeight = HEIGHT; maxHeight = HEIGHT
-        val row = hbox(18.0, sections, spacer(), actions, search, profile).pad(0.0, 28.0, 0.0, 30.0)
+        val row = hbox(14.0, actions, spacer(), search, profile).pad(0.0, 28.0, 0.0, 32.0)
         children += row
         isPickOnBounds = false
         row.isPickOnBounds = false
         render()
-        ui.launch { PluginManager.version.collect { renderSections() } }
     }
 
     fun render() {
-        renderSections()
         val p = Profiles.current
         profile.children.setAll(Avatars.node(p.avatar, 30.0, round = true), label(p.name, "topbar-name"), icon(Icons.EXPAND, 12.0))
         profile.onClick { ProfileMenu.show(profile) }
-    }
-
-    private fun renderSections() {
-        val home = (page as? HomePage)?.takeIf { tab == Tab.HOME }
-        sections.children.setAll(Section.available().map { s ->
-            label(s.label, "topnav-item").apply {
-                if (home != null && home.section == s) styleClass += "active"
-                onClick { window.showSection(s) }
-            }
-        })
     }
 
     fun pageChanged(node: Node, tab: Tab) {
         page = node
         this.tab = tab
         actions.children.setAll((node as? TopBarActions)?.topBarActions().orEmpty())
-        search.isVisible = tab != Tab.SEARCH
+        search.isVisible = tab != Tab.SEARCH && (node as? TopBarActions)?.hasOwnSearch != true
         search.isManaged = search.isVisible
-        renderSections()
     }
 
     fun setSolid(solid: Boolean) {
