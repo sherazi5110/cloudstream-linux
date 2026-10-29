@@ -33,6 +33,20 @@ object Screenshots {
             capture(window, "$prefix-theme-dark.png")
             System.exit(0)
         }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "logos") {
+            System.setProperty("cs.logos.base", "http://localhost:8766/logos-api")
+            runCatching { com.lagradost.cloudstream3.linux.LiveTv.add(com.lagradost.cloudstream3.linux.LiveTv.Kind.M3U, "http://localhost:8766/iptv/playlist.m3u", "Free-TV", "http://localhost:8766/iptv/guide.xml") }
+            window.show(Tab.LIVE)
+            delay(5000)
+            capture(window, "$prefix-livetv-logos.png")
+            window.openSettings("livetv")
+            delay(1000)
+            window.lookupAll(".chip").firstOrNull { (it as? javafx.scene.control.Label)?.text == "Kodi add-on (.zip)" }?.let { javafx.event.Event.fireEvent(it, click()) }
+            delay(800)
+            capture(window, "$prefix-settings-kodi.png")
+            com.lagradost.cloudstream3.linux.LiveTv.saved().forEach { com.lagradost.cloudstream3.linux.LiveTv.remove(it.id) }
+            System.exit(0)
+        }
         if (System.getenv("CS_SCREENSHOT_ONLY") == "kids") {
             // The only profile set to kids, before parent PINs existed: the way out.
             val me = com.lagradost.cloudstream3.linux.Profiles.current

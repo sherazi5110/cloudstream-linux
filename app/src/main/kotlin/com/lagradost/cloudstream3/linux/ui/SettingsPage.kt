@@ -682,8 +682,9 @@ class SettingsPage : StackPane(), Refreshable {
     // ---------- Live TV sources ----------
 
     private fun liveTv(): List<Node> {
-        val kinds = listOf(LiveTv.Kind.STREMIO to "Stremio / Nuvio add-on", LiveTv.Kind.M3U to "M3U playlist (Kodi IPTV)", LiveTv.Kind.XTREAM to "Xtream Codes login")
-        var kind = LiveTv.Kind.M3U
+        // null = a Kodi add-on zip
+        val kinds = listOf(LiveTv.Kind.STREMIO to "Stremio / Nuvio add-on", LiveTv.Kind.M3U to "M3U playlist (Kodi IPTV)", null to "Kodi add-on (.zip)", LiveTv.Kind.XTREAM to "Xtream Codes login")
+        var kind: LiveTv.Kind? = LiveTv.Kind.M3U
         val url = TextField().apply { HBox.setHgrow(this, Priority.ALWAYS) }
         val epg = TextField().apply { promptText = "TV guide (XMLTV) address, optional, e.g. https://…/guide.xml.gz"; HBox.setHgrow(this, Priority.ALWAYS) }
         val user = TextField().apply { promptText = "Username"; HBox.setHgrow(this, Priority.ALWAYS) }
@@ -691,30 +692,16 @@ class SettingsPage : StackPane(), Refreshable {
         val name = TextField().apply { promptText = "Name (optional)"; prefWidth = 200.0 }
         val status = label("", "muted").apply { isWrapText = true }
         val extra = VBox(10.0)
-        fun layoutFields() {
-            url.promptText = when (kind) {
-                LiveTv.Kind.STREMIO -> "Add-on address: https://…/manifest.json or stremio://…"
-                LiveTv.Kind.M3U -> "Playlist address, e.g. https://iptv-org.github.io/iptv/index.m3u"
-                LiveTv.Kind.XTREAM -> "Server address, e.g. http://provider.example:8080"
-            }
-            extra.children.setAll(when (kind) {
-                LiveTv.Kind.STREMIO -> emptyList()
-                LiveTv.Kind.M3U -> listOf(hbox(10.0, epg, name))
-                LiveTv.Kind.XTREAM -> listOf(hbox(10.0, user, pass, name))
-            })
-        }
-        val tabs = ChipGroup { i -> kind = kinds[i].first; layoutFields() }.apply { setItems(kinds.map { it.second }, 1) }
-        layoutFields()
-        val add = button("Add source", Icons.ADD, "btn-accent") {
+        val row = hbox(10.0)
+        lateinit var add: javafx.scene.control.Button
+        fun runAdd(work: suspend () -> String) {
             status.text = "Checking…"; status.styleClass.setAll("label", "muted")
             ui.launch {
                 try {
-                    val (source, count) = withContext(Dispatchers.IO) {
-                        LiveTv.add(kind, url.text, name.text, epg.text, user.text, pass.text)
-                    }
-                    status.text = "Added ${source.name}: $count channels. They're in Live TV."
+                    val message = withContext(Dispatchers.IO) { work() }
+                    status.text = message
                     url.clear(); epg.clear(); user.clear(); pass.clear(); name.clear()
-                    Toasts.show("${source.name}: $count channels added to Live TV")
+                    Toasts.show(message, seconds = 6.0)
                     open("livetv")
                 } catch (t: Throwable) {
                     status.text = "Couldn't add it: ${t.message ?: t}"
@@ -722,7 +709,51 @@ class SettingsPage : StackPane(), Refreshable {
                 }
             }
         }
-        val form = VBox(12.0, tabs, hbox(10.0, url, add), extra, status).apply { styleClass += "card"; pad(16.0, 18.0) }
+        val chooseZip = button("Choose a Kodi add-on zip…", Icons.FOLDER, "btn-accent") {
+            FileChooser().apply {
+                title = "Choose a Kodi add-on (.zip)"
+                extensionFilters += FileChooser.ExtensionFilter("Kodi add-on", "*.zip")
+            }.showOpenDialog(scene.window)?.let { file ->
+                runAdd {
+                    val r = com.lagradost.cloudstream3.linux.KodiAddons.import(file)
+                    "${r.name}: added ${r.added.size} source(s), ${r.added.sumOf { it.second }} channels. They're in Live TV."
+                }
+            }
+        }
+        val chooseFile = button("Choose file…", Icons.FILE, "btn-ghost") {
+            FileChooser().apply {
+                title = "Choose an M3U playlist"
+                extensionFilters += FileChooser.ExtensionFilter("Playlists", "*.m3u", "*.m3u8", "*.txt")
+            }.showOpenDialog(scene.window)?.let { url.text = it.toURI().toString() }
+        }.tooltip("A playlist file on this computer")
+        fun layoutFields() {
+            url.promptText = when (kind) {
+                LiveTv.Kind.STREMIO -> "Add-on address: https://…/manifest.json or stremio://…"
+                LiveTv.Kind.M3U -> "Playlist address (…/playlist.m3u), or choose a file"
+                LiveTv.Kind.XTREAM -> "Server address, e.g. http://provider.example:8080"
+                null -> ""
+            }
+            row.children.setAll(when (kind) {
+                null -> listOf(chooseZip, label("Finds the M3U playlists, TV guides and Xtream links inside an IPTV add-on (e.g. one made for Kodi's IPTV Simple client).", "muted", "small").apply { isWrapText = true; HBox.setHgrow(this, Priority.ALWAYS) })
+                LiveTv.Kind.M3U -> listOf(url, chooseFile, add)
+                else -> listOf(url, add)
+            })
+            extra.children.setAll(when (kind) {
+                LiveTv.Kind.STREMIO, null -> emptyList()
+                LiveTv.Kind.M3U -> listOf(hbox(10.0, epg, name))
+                LiveTv.Kind.XTREAM -> listOf(hbox(10.0, user, pass, name))
+            })
+        }
+        add = button("Add source", Icons.ADD, "btn-accent") {
+            val k = kind ?: return@button
+            runAdd {
+                val (source, count) = LiveTv.add(k, url.text, name.text, epg.text, user.text, pass.text)
+                "Added ${source.name}: $count channels. They're in Live TV."
+            }
+        }
+        val tabs = ChipGroup { i -> kind = kinds[i].first; layoutFields() }.apply { setItems(kinds.map { it.second }, 1) }
+        layoutFields()
+        val form = VBox(12.0, tabs, row, extra, status).apply { styleClass += "card"; pad(16.0, 18.0) }
         val sources = LiveTv.sources()
         val list = VBox().apply {
             styleClass += "card"; pad(4.0, 18.0)
@@ -731,7 +762,7 @@ class SettingsPage : StackPane(), Refreshable {
                 val badge = label(s.name.filter { it.isLetterOrDigit() }.take(2).uppercase(), "provider-badge")
                 val info = vbox(3.0, hbox(8.0, label(s.name, "bold"), label(s.kind.label.uppercase(), "tag")),
                     label(when (s.kind) {
-                        LiveTv.Kind.M3U -> s.url + (s.epgUrl?.let { " · guide: $it" } ?: "")
+                        LiveTv.Kind.M3U -> (if (s.url.startsWith("file:")) "File: " + java.io.File(java.net.URI(s.url)).name else s.url) + (s.epgUrl?.let { " · guide: $it" } ?: "")
                         LiveTv.Kind.XTREAM -> "${s.url} · ${s.user}"
                         LiveTv.Kind.STREMIO -> "Stremio add-on · also listed under Extensions → Stremio add-ons"
                     }, "muted", "small").apply { maxWidth = 620.0 }).apply { HBox.setHgrow(this, Priority.ALWAYS); minWidth = 0.0 }
@@ -744,8 +775,8 @@ class SettingsPage : StackPane(), Refreshable {
         }
         return listOf(
             label("Sources added here appear only in Live TV, never on Home or in Search. Works with Stremio and Nuvio TV add-ons, " +
-                "the M3U / XMLTV playlists Kodi's IPTV Simple client uses, and Xtream Codes logins from IPTV providers. " +
-                "(Kodi's own add-ons are Python programs for Kodi and can't run outside it.)", "muted").apply { isWrapText = true; maxWidth = 860.0 },
+                "the M3U / XMLTV playlists Kodi's IPTV Simple client uses (by address, file, or from inside a Kodi add-on zip), and Xtream Codes logins. " +
+                "Kodi add-ons that are Python programs can't run outside Kodi; their zip is searched for playlists instead.", "muted").apply { isWrapText = true; maxWidth = 860.0 },
             vbox(10.0, label("ADD A SOURCE", "section-label"), form),
             vbox(10.0, label("YOUR LIVE TV SOURCES", "section-label"), list),
             section("Options",

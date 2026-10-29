@@ -1,5 +1,6 @@
 package com.lagradost.cloudstream3.linux.ui
 
+import com.lagradost.cloudstream3.linux.ChannelLogos
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.LiveApi
 import com.lagradost.cloudstream3.linux.LiveTv
@@ -10,7 +11,6 @@ import javafx.scene.Node
 import javafx.scene.control.ProgressIndicator
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.TextField
-import javafx.scene.image.Image
 import javafx.scene.image.ImageView
 import javafx.scene.layout.FlowPane
 import javafx.scene.layout.Region
@@ -307,13 +307,20 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
             style = "-fx-font-size: ${size * 0.3}px;"
         }
         tile.children += initials
-        c.logo?.takeIf { it.startsWith("http") }?.let { url ->
-            val view = ImageView().apply { isPreserveRatio = true; fitWidth = size * 0.82; fitHeight = size * 0.82; isSmooth = true }
-            val image = Image(url, size * 2, size * 2, true, true, true)
-            image.progressProperty().addListener { _, _, p ->
-                if (p.toDouble() >= 1.0 && !image.isError) { tile.children.setAll(view); tile.style = "-fx-background-color: rgba(255,255,255,0.92);" }
+        // The playlist's logo, else one from the open iptv-org database; initials until (or unless) one loads.
+        var started = false
+        tile.sceneProperty().addListener { _, _, scene ->
+            if (scene == null || started) return@addListener
+            started = true
+            ui.launch {
+                for (url in ChannelLogos.candidates(c)) {
+                    val image = Images.image(url, size * 0.82, size * 0.82) ?: continue
+                    val view = ImageView(image).apply { isPreserveRatio = true; fitWidth = size * 0.82; fitHeight = size * 0.82; isSmooth = true }
+                    tile.children.setAll(view)
+                    tile.style = "-fx-background-color: rgba(255,255,255,0.94);"
+                    break
+                }
             }
-            view.image = image
         }
         roundedClip(tile, size * 0.22)
         return tile

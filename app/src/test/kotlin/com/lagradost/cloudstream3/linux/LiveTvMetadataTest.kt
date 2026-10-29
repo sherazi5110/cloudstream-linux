@@ -93,6 +93,50 @@ class LiveTvMetadataTest {
     }
 
     @Test
+    fun `Kodi add-on zips, playlist files, web pages and channel logos`() = runBlocking {
+        val dir = kotlin.io.path.createTempDirectory("kodi").toFile()
+        fun zip(name: String, files: Map<String, String>) = File(dir, name).apply {
+            java.util.zip.ZipOutputStream(outputStream()).use { z -> files.forEach { (path, text) -> z.putNextEntry(java.util.zip.ZipEntry(path)); z.write(text.toByteArray()); z.closeEntry() } }
+        }
+        // An IPTV Simple–style add-on: the playlist and guide addresses are settings defaults.
+        val withUrls = zip("pvr.test.zip", mapOf(
+            "pvr.test/addon.xml" to """<addon id="pvr.test" name="Test IPTV" version="1.0"><extension point="xbmc.addon.metadata"><website>https://example.org/addons.xml</website></extension></addon>""",
+            "pvr.test/resources/settings.xml" to """<settings><setting id="m3uUrl" default="$base/iptv/playlist.m3u"/><setting id="epgUrl" default="$base/iptv/guide.xml"/></settings>""",
+        ))
+        val r1 = KodiAddons.import(withUrls)
+        assertEquals("Test IPTV", r1.name)
+        assertEquals(5, r1.added.single().second)
+        assertEquals("$base/iptv/guide.xml", r1.added.single().first.epgUrl)
+        // A playlist inside the zip.
+        val embedded = zip("plugin.embedded.zip", mapOf(
+            "plugin.embedded/addon.xml" to """<addon id="plugin.embedded" name="Embedded"/>""",
+            "plugin.embedded/resources/channels.m3u" to "#EXTM3U\n#EXTINF:-1 group-title=\"News\",One\n$base/hls/master.m3u8\n#EXTINF:-1,Two\n$base/hls/master.m3u8\n",
+        ))
+        val r2 = KodiAddons.import(embedded)
+        assertEquals(2, r2.added.single().second)
+        assertTrue(r2.added.single().first.url.startsWith("file:"))
+        // A Python-only add-on: a clear error.
+        val python = zip("plugin.video.x.zip", mapOf("plugin.video.x/addon.xml" to """<addon id="plugin.video.x" name="Some Plugin"/>""", "plugin.video.x/main.py" to "import xbmc"))
+        val err = runCatching { KodiAddons.import(python) }.exceptionOrNull()?.message.orEmpty()
+        assertTrue("Some Plugin" in err && "only runs inside Kodi" in err, err)
+
+        // Web pages aren't playlists; GitHub page links become raw file links.
+        val page = runCatching { LiveTv.add(LiveTv.Kind.M3U, "$base/webpage") }.exceptionOrNull()?.message.orEmpty()
+        assertTrue("web page" in page, page)
+        assertEquals("https://raw.githubusercontent.com/u/r/main/list.m3u", LiveTv.rawGithub("https://github.com/u/r/blob/main/list.m3u"))
+
+        // Logos from the iptv-org database: by tvg-id, then by name; SVGs skipped.
+        System.setProperty("cs.logos.base", "$base/logos-api")
+        File(AppDirs.data, "cache/livetv/iptv-org-logos.json").delete()
+        val news = LiveTv.Channel("k", "s", "News 24 HD (1080p)", null, "News", "u", epgId = "News24.uk@SD")
+        assertEquals(listOf("$base/media/poster.png"), ChannelLogos.candidates(news))
+        val cartoon = LiveTv.Channel("k2", "s", "Cartoon Fun Kids [Geo-blocked]", "http://broken/logo.png", "Kids", "u")
+        assertEquals(listOf("http://broken/logo.png", "$base/media/ep_1.jpg"), ChannelLogos.candidates(cartoon))
+        dir.deleteRecursively()
+        Unit
+    }
+
+    @Test
     fun `Xtream logins and Stremio TV add-ons go to Live TV only`() = runBlocking {
         val bad = runCatching { LiveTv.add(LiveTv.Kind.XTREAM, "$base/xtream", null, null, "demo", "wrong") }
         assertTrue(bad.isFailure)

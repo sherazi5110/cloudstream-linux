@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -104,10 +105,11 @@ object LiveTv {
             val source = sources().first { it.id == "stremio:" + addon.manifest.id }
             return source to load(source, force = true).size
         }
-        val clean = url.trim().trimEnd('/')
-        if (!clean.startsWith("http://") && !clean.startsWith("https://")) throw IllegalArgumentException("Enter an address starting with http:// or https://")
+        val clean = rawGithub(url.trim().trimEnd('/'))
+        if (!clean.startsWith("http://") && !clean.startsWith("https://") && !clean.startsWith("file:")) throw IllegalArgumentException("Enter an address starting with http:// or https://")
         val id = MessageDigest.getInstance("SHA-1").digest("$kind|$clean|$user".toByteArray()).take(6).joinToString("") { "%02x".format(it) }
-        val label = name?.takeIf { it.isNotBlank() } ?: java.net.URI(clean).host?.removePrefix("www.") ?: "Playlist"
+        val label = name?.takeIf { it.isNotBlank() }
+            ?: if (clean.startsWith("file:")) File(java.net.URI(clean)).nameWithoutExtension else java.net.URI(clean).host?.removePrefix("www.") ?: "Playlist"
         val source = Source(id, kind, label, clean, epgUrl?.trim()?.ifBlank { null }, user?.trim(), pass)
         val list = fetch(source)
         if (list.isEmpty()) throw IllegalArgumentException("No channels found at that address")
@@ -190,12 +192,27 @@ object LiveTv {
     }.getOrNull()
 
     private suspend fun fetch(source: Source): List<Channel> = when (source.kind) {
-        Kind.M3U -> parseM3u(source.id, text(source.url))
+        Kind.M3U -> text(source.url).let { body ->
+            val head = body.trimStart().take(200).lowercase()
+            if (head.startsWith("<!doctype html") || head.startsWith("<html") || (head.startsWith("<") && "#extinf" !in body.take(20000).lowercase()))
+                throw IllegalArgumentException("That address is a web page, not a playlist. Use the playlist file's own address (it usually ends in .m3u or .m3u8; on GitHub, the \"Raw\" button).")
+            parseM3u(source.id, body)
+        }
         Kind.XTREAM -> xtream(source)
         Kind.STREMIO -> stremio(source)
     }
 
+    /** GitHub page links to a file ("…/blob/…") become the file itself (raw.githubusercontent.com). */
+    fun rawGithub(url: String): String {
+        val m = Regex("^https?://github\\.com/([^/]+)/([^/]+)/blob/(.+)$").find(url) ?: return url
+        return "https://raw.githubusercontent.com/${m.groupValues[1]}/${m.groupValues[2]}/${m.groupValues[3]}"
+    }
+
     private fun text(url: String): String {
+        if (url.startsWith("file:")) {
+            val bytes = File(java.net.URI(url)).readBytes()
+            return if (bytes.size > 2 && bytes[0] == 0x1f.toByte() && bytes[1] == 0x8b.toByte()) GZIPInputStream(bytes.inputStream()).readBytes().decodeToString() else bytes.decodeToString()
+        }
         val r = app.baseClient.newCall(okhttp3.Request.Builder().url(url).header("User-Agent", com.lagradost.cloudstream3.USER_AGENT).build()).execute()
         r.use {
             if (!it.isSuccessful) throw java.io.IOException("HTTP ${it.code}")
@@ -451,5 +468,157 @@ object LiveApi : MainAPI() {
             headers["Referer"]?.let { referer = it }
         })
         return true
+    }
+}
+
+/**
+ * Channel logos from the open iptv-org database (github.com/iptv-org/database, public domain),
+ * for channels whose playlist has no logo or a broken one. Matched by tvg-id, then by name.
+ * The lookup tables are downloaded once a week and kept small on disk.
+ */
+object ChannelLogos {
+    /** iptv-org's API, with GitHub's copy of the same files as a second address. */
+    private val bases get() = System.getProperty("cs.logos.base")?.let { listOf(it) }
+        ?: listOf("https://iptv-org.github.io/api", "https://raw.githubusercontent.com/iptv-org/api/gh-pages")
+    private val file get() = File(AppDirs.data, "cache/livetv/iptv-org-logos.json")
+    @Volatile private var byId: Map<String, String>? = null
+    @Volatile private var byName: Map<String, String>? = null
+    private val lock = kotlinx.coroutines.sync.Mutex()
+
+    /** Logo addresses to try for [c], best first. */
+    suspend fun candidates(c: LiveTv.Channel): List<String> {
+        val own = c.logo?.takeIf { it.startsWith("http") }
+        val fromDb = runCatching { lookup(c) }.getOrNull()
+        return listOfNotNull(own, fromDb).distinct()
+    }
+
+    suspend fun lookup(c: LiveTv.Channel): String? {
+        ensureLoaded()
+        val id = c.epgId?.substringBefore('@')?.lowercase()
+        return id?.let { byId?.get(it) } ?: byName?.get(normalize(c.name))
+    }
+
+    /** "1+1 International HD (720p) [Geo-blocked]" → "1+1international". */
+    fun normalize(name: String) = name.lowercase()
+        .replace(Regex("\\[[^]]*]|\\([^)]*\\)"), " ")
+        .replace(Regex("\\b(hd|fhd|uhd|sd|4k|hevc|backup|tv)\\b"), " ")
+        .replace(Regex("[^\\p{L}\\p{N}+]"), "")
+
+    private suspend fun ensureLoaded() {
+        if (byId != null) return
+        lock.withLock {
+            if (byId != null) return
+            withContext(Dispatchers.IO) {
+                val fresh = file.isFile && System.currentTimeMillis() - file.lastModified() < 7 * 24 * 3600_000L
+                val json = (if (fresh) runCatching { JSONObject(file.readText()) }.getOrNull() else null) ?: runCatching { download() }
+                    .onFailure { System.err.println("W/logos: $it") }.getOrNull()
+                    ?: runCatching { JSONObject(file.readText()) }.getOrNull() // stale is better than nothing
+                val ids = json?.optJSONObject("ids"); val names = json?.optJSONObject("names")
+                byId = ids?.keySet()?.associateWith { ids.getString(it) }.orEmpty()
+                byName = names?.keySet()?.associateWith { names.getString(it) }.orEmpty()
+            }
+        }
+    }
+
+    private fun get(url: String): String {
+        app.baseClient.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { r ->
+            if (!r.isSuccessful) throw java.io.IOException("HTTP ${r.code} for $url")
+            return r.body.string()
+        }
+    }
+
+    private fun download(): JSONObject {
+        var last: Throwable? = null
+        for (base in bases) {
+            try { return download(base) } catch (t: Throwable) { last = t }
+        }
+        throw last ?: java.io.IOException("no logo database address")
+    }
+
+    private fun download(base: String): JSONObject {
+        // logos.json: [{channel, feed, format, width, url}]; channels.json: [{id, name, alt_names, logo?}]
+        val logos = mutableMapOf<String, Pair<Int, String>>()
+        runCatching { JSONArray(get("$base/logos.json")) }.getOrNull()?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val format = o.optString("format").uppercase()
+                if (format == "SVG" || o.optString("url").endsWith(".svg")) continue // JavaFX can't draw SVG
+                val score = o.optInt("width") + (if (o.isNull("feed") || o.optString("feed").isBlank()) 10_000 else 0) +
+                    (if (o.optBoolean("in_use", true)) 20_000 else 0)
+                val id = o.optString("channel").lowercase()
+                if ((logos[id]?.first ?: -1) < score) logos[id] = score to o.optString("url")
+            }
+        }
+        val names = mutableMapOf<String, String>()
+        val channels = JSONArray(get("$base/channels.json"))
+        for (i in 0 until channels.length()) {
+            val o = channels.optJSONObject(i) ?: continue
+            val id = o.optString("id").lowercase()
+            val logo = logos[id]?.second ?: o.optString("logo").takeIf { it.startsWith("http") && !it.endsWith(".svg") } ?: continue
+            if (id !in logos) logos[id] = 0 to logo
+            val all = listOf(o.optString("name")) + (o.optJSONArray("alt_names")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty())
+            all.map(::normalize).filter { it.length >= 2 }.forEach { names.putIfAbsent(it, logo) }
+        }
+        val out = JSONObject().put("ids", JSONObject(logos.mapValues { it.value.second })).put("names", JSONObject(names as Map<*, *>))
+        file.parentFile.mkdirs()
+        file.writeText(out.toString())
+        return out
+    }
+}
+
+/**
+ * Kodi add-on zips. Kodi add-ons are mostly Python programs that only run inside Kodi, but IPTV
+ * ones usually carry what Kodi's IPTV Simple client needs: M3U playlists (inside the zip or as
+ * addresses), TV guide (XMLTV) addresses, or Xtream "get.php" playlist links. Those are found,
+ * checked and added as Live TV sources.
+ */
+object KodiAddons {
+    data class Result(val name: String, val added: List<Pair<LiveTv.Source, Int>>)
+
+    private val urlPattern = Regex("""https?://[^\s"'<>\\)\]]+""")
+    private val textFile = Regex(".*\\.(xml|py|json|txt|m3u8?|ini|cfg|conf|yaml|yml|properties)$", RegexOption.IGNORE_CASE)
+
+    suspend fun import(zip: File): Result = withContext(Dispatchers.IO) {
+        val texts = mutableMapOf<String, String>()
+        java.util.zip.ZipFile(zip).use { z ->
+            z.entries().asSequence().filter { !it.isDirectory && it.size in 0..8_000_000 && textFile.matches(it.name) }.take(400).forEach { e ->
+                texts[e.name] = z.getInputStream(e).use { it.readBytes().decodeToString() }
+            }
+        }
+        if (texts.isEmpty() && !zip.name.endsWith(".zip", true)) throw IllegalArgumentException("That isn't a zip file")
+        val addonXml = texts.entries.firstOrNull { it.key.substringAfterLast('/') == "addon.xml" }?.value
+        val name = addonXml?.let { Regex("<addon[^>]*\\bname=\"([^\"]+)\"").find(it)?.groupValues?.get(1) } ?: zip.nameWithoutExtension
+        val id = addonXml?.let { Regex("<addon[^>]*\\bid=\"([^\"]+)\"").find(it)?.groupValues?.get(1) } ?: zip.nameWithoutExtension
+
+        // 1. Playlists inside the zip: saved as files and added.
+        val dir = File(AppDirs.data, "livetv/kodi").apply { mkdirs() }
+        val embedded = texts.filter { (path, body) -> path.endsWith(".m3u", true) || path.endsWith(".m3u8", true) || body.trimStart().startsWith("#EXTM3U") }
+            .filter { (_, body) -> body.lines().count { it.trimStart().startsWith("#EXTINF", true) } >= 2 }
+        // 2. Addresses mentioned anywhere (settings defaults, Python constants, JSON).
+        val urls = texts.values.flatMap { urlPattern.findAll(it).map { m -> m.value.trimEnd('.', ',', ';', '\'', '"') } }.distinct()
+        val guides = urls.filter { u -> val l = u.lowercase(); (l.contains("epg") || l.contains("xmltv") || l.contains("guide")) && !l.contains("addons.xml") && !l.contains(".m3u") }
+        val playlists = urls.filter { u ->
+            val l = u.lowercase().substringBefore('#')
+            l.substringBefore('?').endsWith(".m3u") || (l.contains("get.php") && l.contains("username=")) ||
+                (l.substringBefore('?').endsWith(".m3u8") && Regex("playlist|list|channels|iptv|index|tv").containsMatchIn(l.substringAfterLast('/')))
+        }.sortedBy { if (it.lowercase().substringBefore('?').endsWith(".m3u")) 0 else 1 }.take(8)
+        val guide = guides.firstOrNull()
+
+        val added = mutableListOf<Pair<LiveTv.Source, Int>>()
+        embedded.entries.forEachIndexed { i, (path, body) ->
+            val file = File(dir, "${id.replace(Regex("[^\\w.-]"), "_")}-$i.m3u").apply { writeText(body) }
+            runCatching { LiveTv.add(LiveTv.Kind.M3U, file.toURI().toString(), if (embedded.size > 1) "$name (${path.substringAfterLast('/')})" else name, guide) }
+                .onSuccess { added += it }
+        }
+        for (u in playlists) {
+            runCatching { LiveTv.add(LiveTv.Kind.M3U, u, if (added.isEmpty()) name else "$name ${added.size + 1}", guide) }
+                .onSuccess { added += it }
+                .onFailure { System.err.println("W/kodi: $u: ${it.message}") }
+        }
+        if (added.isEmpty()) {
+            throw IllegalArgumentException("“$name” has no IPTV playlist inside. It's a Kodi program (Python) that only runs inside Kodi. " +
+                "If its website gives you an M3U playlist address or an Xtream Codes login, add that instead.")
+        }
+        Result(name, added)
     }
 }

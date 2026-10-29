@@ -273,6 +273,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, srt, "application/x-subrip")
         if parts and parts[0] == "addon":
             return self.addon(parts[1:])
+        if parts[:1] == ["logos-api"] and len(parts) == 2:
+            # The iptv-org API's shape (channels.json + logos.json), tiny.
+            if parts[1] == "channels.json":
+                return self.send(200, json.dumps([{"id": "News24.uk", "name": "News 24", "alt_names": []},
+                                                  {"id": "CartoonFun.us", "name": "Cartoon Fun", "alt_names": ["Cartoon Fun Kids"]}]))
+            if parts[1] == "logos.json":
+                root = f"http://localhost:{self.server.server_port}"
+                return self.send(200, json.dumps([{"channel": "News24.uk", "feed": None, "in_use": True, "width": 300, "format": "PNG", "url": f"{root}/media/poster.png"},
+                                                  {"channel": "News24.uk", "feed": None, "in_use": True, "width": 900, "format": "SVG", "url": f"{root}/x.svg"},
+                                                  {"channel": "CartoonFun.us", "feed": None, "in_use": True, "width": 200, "format": "PNG", "url": f"{root}/media/ep_1.jpg"}]))
+        if parts == ["webpage"]:
+            # Like a GitHub repository page: HTML that merely mentions #EXTINF in its README.
+            return self.send(200, "<!DOCTYPE html><html><body><pre>#EXTM3U\n#EXTINF:-1,Example\nhttp://x/1.m3u8\n#EXTINF:-1,Two\nhttp://x/2.m3u8</pre></body></html>", "text/html")
         if parts and parts[0] == "iptv":
             return self.iptv(parts[1:])
         if parts and parts[0] == "xtream":
