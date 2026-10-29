@@ -140,6 +140,16 @@ class PlaybackFeaturesTest {
     }
 
     @Test
+    fun `posters from TMDB are fetched at the size shown`() {
+        val images = com.lagradost.cloudstream3.linux.ui.Images
+        assertEquals("https://image.tmdb.org/t/p/w342/a.jpg", images.tmdbSized("https://image.tmdb.org/t/p/original/a.jpg", 315.0))
+        assertEquals("https://image.tmdb.org/t/p/w500/a.jpg", images.tmdbSized("https://image.tmdb.org/t/p/w780/a.jpg", 420.0))
+        assertEquals(null, images.tmdbSized("https://image.tmdb.org/t/p/w185/a.jpg", 315.0)) // already small
+        assertEquals(null, images.tmdbSized("https://image.tmdb.org/t/p/original/a.jpg", 1600.0)) // big backdrops stay
+        assertEquals(null, images.tmdbSized("https://example.com/t/p/original/a.jpg", 315.0))
+    }
+
+    @Test
     fun `catalogs can be hidden and reordered per extension`() = runBlocking {
         val api = demo()
         val all = Catalogs.all(api)

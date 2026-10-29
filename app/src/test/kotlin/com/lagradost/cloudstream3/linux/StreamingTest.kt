@@ -66,7 +66,12 @@ class StreamingTest {
     fun `home sections and search stream per provider`() = runBlocking {
         val api = demo()
         val sections = Engine.home(listOf(api)).toList()
-        assertEquals(3, sections.size)
+        assertEquals(4, sections.size)
+        // The Endless catalog pages until hasNext is false (what "View all" scrolls through).
+        val endless = sections.first { it.section.data == "paged" }.section
+        val pages = (1..5).map { Engine.homePage(api, endless, it)!! }
+        assertEquals(listOf(true, true, true, false, false), pages.map { it.hasNext })
+        assertEquals(24, pages[0].items.single().list.size)
         val batches = Engine.search("pixel", listOf(api)).toList()
         assertEquals(listOf("Pixel City", "His Girl Pixel"), batches.single().results.map { it.name })
     }

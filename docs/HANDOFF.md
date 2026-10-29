@@ -20,7 +20,11 @@ Read this first when continuing work on CloudStream for Linux.
   5. **Settings:** searchable Keyboard shortcuts page, Site addresses (`SiteOverrides` in `Maintenance.kt`,
      applied in `Engine.providers()`), update check (`Updates`, GitHub releases of sherazi5110/cloudstream-linux),
      reset settings / erase all data.
-- Tests: `./gradlew test`, 16 tests, all passing (libVLC must be installed for the playback test).
+  6. **"View all" scrolls endlessly** (`GridPage`): next pages load by themselves near the bottom until the
+     extension says `hasNext = false` (Demo's "Endless catalog" has 4 pages for testing). **Posters on slow
+     connections** (`Images`): disk cache read without waiting for a download slot, 12 slots, posters that left
+     the screen give their slot up, TMDB images fetched at the shown width, one retry, shorter timeouts.
+- Tests: `./gradlew test`, 17 tests, all passing (libVLC must be installed for the playback test).
 
 ## How the owner works
 

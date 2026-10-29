@@ -11,6 +11,7 @@ import com.lagradost.cloudstream3.linux.Settings
 import javafx.geometry.Pos
 import javafx.scene.Node
 import javafx.scene.control.ProgressIndicator
+import javafx.scene.control.ScrollPane
 import javafx.scene.effect.GaussianBlur
 import javafx.scene.image.ImageView
 import javafx.scene.layout.FlowPane
@@ -262,34 +263,77 @@ class HomePage : StackPane(), Refreshable {
     }
 }
 
-/** "View all" for one home section, with paging when the provider supports it. */
+/**
+ * "View all" for one home section. Pages load by themselves while scrolling (and while the
+ * grid doesn't fill the window yet) until the extension has nothing more.
+ */
 class GridPage(private val api: MainAPI, title: String, private val section: MainPageData, first: List<SearchResponse>) : StackPane(), Disposable {
     private val grid = FlowPane(18.0, 22.0)
     private var page = 1
-    private val more = button("Load more", Icons.REFRESH, "btn-ghost") { loadMore() }
+    private var loading = false
+    private var finished = false
+    private val seen = HashSet<String>()
+    private val spinner = ProgressIndicator().apply { setPrefSize(22.0, 22.0); setMaxSize(22.0, 22.0) }
+    private val status = label("", "muted")
+    private val retry = button("Try again", Icons.REFRESH, "btn-ghost") { loadMore() }.apply { isVisible = false; isManaged = false }
+    private val footer = hbox(10.0, spinner, status, retry).apply { alignment = Pos.CENTER; minHeight = 44.0 }
+    private val scroll: ScrollPane
     private var job: Job? = null
 
     init {
         val header = hbox(14.0, button(null, Icons.BACK, "btn-ghost") { Nav.window.back() }, label(title, "h2"), label(api.name, "tag"))
         first.forEach { add(it) }
-        children += pageScroll(vbox(24.0, header, grid, more).pad(22.0, 36.0, 40.0, 36.0))
+        scroll = pageScroll(vbox(24.0, header, grid, footer).pad(22.0, 36.0, 40.0, 36.0))
+        children += scroll
+        idle()
+        scroll.vvalueProperty().addListener { _, _, _ -> maybeLoad() }
+        scroll.viewportBoundsProperty().addListener { _, _, _ -> maybeLoad() }
+        grid.heightProperty().addListener { _, _, _ -> maybeLoad() }
     }
 
-    private fun add(item: SearchResponse) {
+    private fun add(item: SearchResponse): Boolean {
+        if (!seen.add(item.url)) return false
         grid.children += PosterCard.of(item) { Nav.open(api, item) }
+        return true
+    }
+
+    /** Loads the next page when the bottom is near: the last ~1.5 screens, or no scrolling yet. */
+    private fun maybeLoad() {
+        if (loading || finished || retry.isVisible || scene == null) return
+        val content = (scroll.content as Region).height
+        val viewport = scroll.viewportBounds.height
+        if (viewport <= 0) return
+        val below = (content - viewport) * (1 - scroll.vvalue)
+        if (below < viewport * 1.5) javafx.application.Platform.runLater { if (!loading) loadMore() }
     }
 
     private fun loadMore() {
-        more.isDisable = true
-        more.text = "Loading…"
+        if (loading || finished) return
+        loading = true
+        retry.isVisible = false; retry.isManaged = false
+        spinner.isVisible = true; spinner.isManaged = true
+        status.text = "Loading more…"
         job = ui.launch {
-            val response = Engine.homePage(api, section, ++page)
-            val items = response?.items?.flatMap { it.list }.orEmpty()
-            items.forEach { add(it) }
-            more.isDisable = false
-            more.text = "Load more"
-            more.isVisible = items.isNotEmpty() && response?.hasNext != false
+            val response = runCatching { Engine.homePage(api, section, page + 1) }.getOrNull()
+            loading = false
+            if (response == null) {
+                spinner.isVisible = false; spinner.isManaged = false
+                status.text = "Couldn't load more."
+                retry.isVisible = true; retry.isManaged = true
+                return@launch
+            }
+            page++
+            val added = response.items.flatMap { it.list }.count { add(it) }
+            // Done when the page was empty, said so, or only repeated what we already have.
+            finished = added == 0 || !response.hasNext
+            idle()
+            if (!finished) maybeLoad()
         }
+    }
+
+    private fun idle() {
+        spinner.isVisible = false; spinner.isManaged = false
+        status.text = if (finished) "That's everything · ${grid.children.size} titles" else ""
     }
 
     override fun dispose() {
