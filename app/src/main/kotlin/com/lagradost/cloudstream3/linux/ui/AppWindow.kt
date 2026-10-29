@@ -169,16 +169,20 @@ class AppWindow(val stage: Stage) : StackPane() {
     private fun applyTheme() {
         style = Theme.rootStyle()
         scene?.fill = Color.web(Theme.background)
+        styleClass.remove("glass")
+        if (Theme.isGlass) styleClass += "glass"
         val path = Theme.wallpaper
         if (path == null) {
-            wallpaper.children.clear()
+            wallpaper.children.setAll(listOfNotNull(
+                if (Theme.isGlass) Region().apply { style = Theme.glassBackdropStyle(); isMouseTransparent = true } else null,
+            ))
             return
         }
         val view = ImageView(Image(File(path).toURI().toString(), 1920.0, 1080.0, true, true, true)).apply {
             isPreserveRatio = false
             fitWidthProperty().bind(this@AppWindow.widthProperty())
             fitHeightProperty().bind(this@AppWindow.heightProperty())
-            if (Theme.wallpaperBlur) effect = GaussianBlur(28.0)
+            if (Theme.wallpaperBlur || Theme.isGlass) effect = GaussianBlur(if (Theme.isGlass) 40.0 else 28.0)
         }
         val dim = Region().apply { styleClass += "wallpaper-dim"; opacity = Theme.wallpaperDim }
         wallpaper.children.setAll(view, dim)

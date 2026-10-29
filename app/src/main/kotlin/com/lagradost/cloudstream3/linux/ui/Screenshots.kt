@@ -32,7 +32,11 @@ object Screenshots {
             delay(1200)
             capture(window, "$prefix-settings-$category.png")
         }
-        for (mode in listOf(ThemeMode.LIGHT, ThemeMode.AMOLED)) {
+        Theme.mode = ThemeMode.GLASS
+        window.openSettings("appearance")
+        delay(1200)
+        capture(window, "$prefix-glass-settings.png")
+        for (mode in listOf(ThemeMode.LIGHT, ThemeMode.AMOLED, ThemeMode.GLASS)) {
             Theme.mode = mode
             window.show(Tab.HOME)
             delay(1500)

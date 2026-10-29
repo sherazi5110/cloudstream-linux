@@ -155,6 +155,25 @@ class SettingsPage : StackPane(), Refreshable {
     // ---------- categories ----------
 
     private fun appearance(): List<Node> {
+        val presets = FlowPane(10.0, 10.0).apply {
+            ThemePreset.entries.forEach { p ->
+                val bg = when (p.mode) {
+                    ThemeMode.GLASS -> "linear-gradient(to bottom right, ${p.accent}, #0b0820 70%)"
+                    ThemeMode.LIGHT -> "#f4f4f7"
+                    ThemeMode.AMOLED -> "#000000"
+                    ThemeMode.MIDNIGHT -> "#0a0f1c"
+                    ThemeMode.DARK -> "#0b0b10"
+                }
+                val dot = Region().apply { style = "-fx-background-color: ${p.accent}; -fx-background-radius: 999;"; setMinSize(14.0, 14.0); setMaxSize(14.0, 14.0) }
+                val text = label(p.label, "bold").apply { style = "-fx-text-fill: ${if (p.mode == ThemeMode.LIGHT) "#15151b" else "white"};" }
+                children += hbox(8.0, dot, text).apply {
+                    styleClass += "preset-card"
+                    if (Theme.preset == p) styleClass += "selected"
+                    style = "-fx-background-color: $bg;"
+                    onClick { Theme.apply(p); open("appearance") }
+                }
+            }
+        }
         val modes = FlowPane(12.0, 12.0).apply {
             ThemeMode.entries.forEach { m ->
                 val preview = when (m) {
@@ -162,6 +181,7 @@ class SettingsPage : StackPane(), Refreshable {
                     ThemeMode.AMOLED -> "#000000" to "#131316"
                     ThemeMode.MIDNIGHT -> "#0a0f1c" to "#18223a"
                     ThemeMode.LIGHT -> "#f4f4f7" to "#ffffff"
+                    ThemeMode.GLASS -> "linear-gradient(to bottom right, #6d28d9, #0ea5e9 60%, #ec4899)" to "rgba(255,255,255,0.28)"
                 }
                 val swatch = StackPane(Region().apply {
                     style = "-fx-background-color: ${preview.second}; -fx-background-radius: 6;"
@@ -205,7 +225,9 @@ class SettingsPage : StackPane(), Refreshable {
         }
         return listOf(
             section("Theme",
-                row("Mode", "Dark, true-black AMOLED (saves power on OLED screens), midnight blue, or light.", Region()),
+                row("Presets", "One click for a matching mode and accent colour.", Region()),
+                presets.pad(0.0, 0.0, 12.0, 0.0),
+                row("Mode", "Dark, true-black AMOLED (saves power on OLED screens), midnight blue, light, or liquid glass (translucent panels over a soft colour backdrop or your wallpaper).", Region()),
                 modes.pad(0.0, 0.0, 12.0, 0.0),
                 row("Accent colour", "Buttons, highlights and the player's progress bar. Enter a hex colour for your own.", accents),
             ),
