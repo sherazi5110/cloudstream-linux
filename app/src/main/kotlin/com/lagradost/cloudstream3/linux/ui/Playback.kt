@@ -2,13 +2,9 @@ package com.lagradost.cloudstream3.linux.ui
 
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
-import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.linux.Engine
-import com.lagradost.cloudstream3.linux.Library
 import com.lagradost.cloudstream3.linux.Playable
-import com.lagradost.cloudstream3.linux.Player
 import com.lagradost.cloudstream3.linux.Settings
-import com.lagradost.cloudstream3.linux.WatchEntry
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import javafx.animation.Interpolator
@@ -24,11 +20,8 @@ import javafx.scene.layout.Region
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.util.Duration
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.net.URI
-import kotlin.math.abs
 
 /** Starting playback: find sources on the loading screen, then hand over to the player. */
 object Playback {
@@ -44,45 +37,12 @@ object Playback {
 
     fun start(api: MainAPI, response: LoadResponse, playable: Playable, sources: SourceCollector, link: ExtractorLink) {
         Nav.window.closeOverlay()
-        val builtin = Settings.player == "builtin" && Vlc.factory != null
-        if (Settings.player == "builtin" && !builtin) {
-            Toasts.show("The built-in player needs VLC's libraries: sudo apt install vlc. Using mpv for now.", seconds = 10.0)
-        }
-        if (builtin) {
-            active = BuiltinPlayer(api, response, playable, sources, link).also { it.start() }
-        } else if (Settings.player == "builtin" || Settings.player == "mpv") {
-            active = PlayerSession(api, response, playable, sources, link).also { it.start() }
-        } else {
+        if (Vlc.factory == null) {
             sources.cancel()
-            external(api, response, playable, link, sources.subtitles.toList())
-        }
-    }
-
-    /** VLC / ffplay: hand the stream over; progress can't be tracked. */
-    private fun external(api: MainAPI, response: LoadResponse, playable: Playable, link: ExtractorLink, subtitles: List<SubtitleFile>) {
-        val all = Engine.playables(response)
-        val resume = Library.progress(api.name, playable.data)?.takeIf { it.duration > 0 && it.position / it.duration < 0.92 }?.position
-        val session = try {
-            Player.play(link, subtitles, title(response, playable, all.size), start = resume)
-        } catch (t: Throwable) {
-            Toasts.show(t.message ?: t.toString(), seconds = 8.0)
+            Toasts.show("Playing needs VLC's libraries: sudo apt install libvlc5 vlc-plugin-base", seconds = 12.0)
             return
         }
-        Toasts.show("Opening in ${Settings.player}")
-        ui.launch {
-            var saved = -100.0
-            val (position, duration) = session.track { p, d ->
-                if (abs(p - saved) >= 10) {
-                    saved = p
-                    Library.record(WatchEntry(api.name, response.url, response.name, response.posterUrl, playable.data,
-                        if (all.size > 1) playable.label else null, p, d, System.currentTimeMillis()))
-                }
-            }
-            if (duration > 0) withContext(Dispatchers.IO) {
-                Library.record(WatchEntry(api.name, response.url, response.name, response.posterUrl, playable.data,
-                    if (all.size > 1) playable.label else null, position, duration, System.currentTimeMillis()))
-            }
-        }
+        active = BuiltinPlayer(api, response, playable, sources, link).also { it.start() }
     }
 }
 

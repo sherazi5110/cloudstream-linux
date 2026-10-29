@@ -99,11 +99,13 @@ object OnlineSubtitles {
             ?: code
     }
 
-    /** Whether an addon language code matches a user setting such as "en", "eng" or "English". */
+    /** Whether a language code matches a user setting such as "en", "eng", "English" or a list like "ar,en". */
     fun matches(code: String, wanted: String): Boolean {
         if (wanted.isBlank()) return true
-        val w = wanted.trim().lowercase()
-        val iso3 = runCatching { Locale(w).isO3Language }.getOrNull()
-        return code.lowercase() == w || code.lowercase() == iso3 || languageName(code).lowercase() == w
+        val c = code.trim().lowercase()
+        return wanted.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.any { w ->
+            val iso3 = runCatching { Locale(w).isO3Language }.getOrNull()
+            c == w || c == iso3 || languageName(c).lowercase() == w
+        }
     }
 }

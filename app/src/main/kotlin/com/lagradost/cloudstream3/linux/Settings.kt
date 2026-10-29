@@ -23,12 +23,7 @@ object Settings {
         prefs.edit().putString(key, value.toString()).apply()
     }
 
-    /** builtin = the in-app VLC-based player; mpv = mpv in its own window; vlc; ffplay. */
-    var player: String
-        get() = string("player", "builtin").let { if (it == "mpv" || it in Player.supported || it == "builtin") it else "builtin" }
-        set(v) = put("player", v)
-
-    /** Lower-power playback for low-end PCs and battery: cheap scaling, no extras. */
+    /** Lower-power playback for low-end PCs and battery: skip H.264 deblocking, buffer more. */
     var batterySaver: Boolean
         get() = string("battery_saver", "false").toBoolean()
         set(v) = put("battery_saver", v)
@@ -37,7 +32,7 @@ object Settings {
         get() = string("auto_play_next", "true").toBoolean()
         set(v) = put("auto_play_next", v)
 
-    /** mpv --slang value, e.g. "en" or "ar,en"; empty = no subtitles by default. */
+    /** Subtitle languages to turn on automatically, e.g. "en" or "ar,en"; empty = off by default. */
     var subtitleLanguage: String
         get() = string("subtitle_language", "")
         set(v) = put("subtitle_language", v)
@@ -61,10 +56,6 @@ object Settings {
         get() = string("dns_fallback", "true").toBoolean()
         set(v) = put("dns_fallback", v)
 
-    var mpvArgs: String
-        get() = string("mpv_args", "")
-        set(v) = put("mpv_args", v)
-
     /** Upper bound for one provider's loadLinks call; links found before it are kept. */
     var sourcesTimeoutSeconds: Int
         get() = string("sources_timeout", "60").toInt()
@@ -74,10 +65,49 @@ object Settings {
         get() = string("auto_update_extensions", "true").toBoolean()
         set(v) = put("auto_update_extensions", v)
 
-    /** Built-in player volume, 0–150 (VLC allows boosting above 100). */
+    /** Built-in player volume, 0–200 (VLC allows boosting above 100). */
     var playerVolume: Int
-        get() = string("player_volume", "100").toIntOrNull()?.coerceIn(0, 150) ?: 100
+        get() = string("player_volume", "100").toIntOrNull()?.coerceIn(0, 200) ?: 100
         set(v) = put("player_volume", v)
+
+    /** Look for a newer release on GitHub once a day at startup. */
+    var checkUpdates: Boolean
+        get() = string("check_updates", "true") == "true"
+        set(v) = put("check_updates", v)
+
+    /** Home: rotate the featured banner through the first catalog's top titles. */
+    var heroSlider: Boolean
+        get() = string("hero_slider", "true") == "true"
+        set(v) = put("hero_slider", v)
+
+    /** Hide thumbnails and descriptions of episodes not watched yet. */
+    var antiSpoiler: Boolean
+        get() = string("anti_spoiler", "false") == "true"
+        set(v) = put("anti_spoiler", v)
+
+    /** VLC equalizer preset name ("Rock", "Classical", …); empty = off. */
+    var playerEqualizer: String
+        get() = string("player_equalizer", "")
+        set(v) = put("player_equalizer", v)
+
+    /** Audio languages to pick automatically, e.g. "en" or "ja,en"; empty = the stream's default. */
+    var audioLanguage: String
+        get() = string("audio_language", "")
+        set(v) = put("audio_language", v.trim())
+
+    /** Subtitle look: size SMALL/NORMAL/LARGE/HUGE, text colour, outline 0–6, background box. */
+    var subtitleSize: String
+        get() = string("subtitle_size", "NORMAL")
+        set(v) = put("subtitle_size", v)
+    var subtitleColor: String
+        get() = string("subtitle_color", "#ffffff")
+        set(v) = put("subtitle_color", v)
+    var subtitleOutline: Int
+        get() = string("subtitle_outline", "4").toIntOrNull()?.coerceIn(0, 6) ?: 4
+        set(v) = put("subtitle_outline", v)
+    var subtitleBackground: Boolean
+        get() = string("subtitle_background", "false") == "true"
+        set(v) = put("subtitle_background", v)
 
     /** Built-in player zoom mode, a [com.lagradost.cloudstream3.linux.ui.Zoom] name. */
     var playerZoom: String

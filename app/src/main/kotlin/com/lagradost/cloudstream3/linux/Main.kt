@@ -24,7 +24,6 @@ private const val USAGE = """cloudstream-linux — run CloudStream extensions on
   search <query> [--provider NAME]
   info <provider> <url>                   load details and list playable items
   links <provider> <url> [--item N]       resolve stream links for item N (default 1)
-  play <provider> <url> [--item N] [--link N] [--player mpv|vlc|ffplay]
   key get <key> | key set <key> <value>   read/write the key store extensions use (CloudStreamApp.getKey)
   doctor                                  print diagnostics for bug reports
   compat <file.cs3|file.jar>              check an extension for APIs missing on Linux (doesn't run it)
@@ -69,7 +68,7 @@ suspend fun cli(args: List<String>): Int {
     Platform.init()
     Network.init()
     val pos = args.positional()
-    val needsPlugins = pos[0] in setOf("providers", "home", "search", "info", "links", "play", "doctor")
+    val needsPlugins = pos[0] in setOf("providers", "home", "search", "info", "links", "doctor")
     if (needsPlugins) PluginManager.loadAll().forEach { (n, e) -> System.err.println("warn: $n failed to load: $e") }
 
     when (pos[0]) {
@@ -129,25 +128,17 @@ suspend fun cli(args: List<String>): Int {
             item.plot?.let { println(it) }
             Engine.playables(item).forEachIndexed { i, p -> println("  ${i + 1}. ${p.label}") }
         }
-        "links", "play" -> {
+        "links" -> {
             val api = requireProvider(pos[1])
             val item = loadItem(api, pos[2])
             val playables = Engine.playables(item)
             val index = (args.option("--item")?.toInt() ?: 1) - 1
             val playable = playables.getOrNull(index) ?: error("Item ${index + 1} not found (${playables.size} items)")
             val result = Engine.allLinks(api, playable.data)
-            if (pos[0] == "links") {
-                result.links.forEachIndexed { i, l ->
-                    println("${i + 1}. [${Qualities.getStringByInt(l.quality).ifEmpty { "?" }}] ${l.name} (${l.type})\n   ${l.url}")
-                }
-                result.subtitles.forEach { println("sub: ${it.lang}\t${it.url}") }
-            } else {
-                require(result.links.isNotEmpty()) { "No links found" }
-                val link = result.links[(args.option("--link")?.toInt() ?: 1) - 1]
-                val title = "${item.name} — ${playable.label}"
-                val session = Player.play(link, result.subtitles, title, args.option("--player") ?: Player.preferred)
-                return session.process.waitFor()
+            result.links.forEachIndexed { i, l ->
+                println("${i + 1}. [${Qualities.getStringByInt(l.quality).ifEmpty { "?" }}] ${l.name} (${l.type})\n   ${l.url}")
             }
+            result.subtitles.forEach { println("sub: ${it.lang}\t${it.url}") }
         }
         "key" -> when (pos.getOrNull(1)) {
             "set" -> CloudStreamApp.setKey(pos[2], pos[3]).also { println("${pos[2]} = ${pos[3]}") }
@@ -167,7 +158,7 @@ suspend fun cli(args: List<String>): Int {
             println("java      ${System.getProperty("java.version")} (${System.getProperty("java.vendor")})")
             println("data      ${AppDirs.data}")
             println("log       ${Logs.file}")
-            println("players   ${Player.installed().ifEmpty { listOf("none — sudo apt install mpv") }.joinToString()}")
+            println("libVLC    ${com.lagradost.cloudstream3.linux.ui.Vlc.version ?: "not found — sudo apt install libvlc5 vlc-plugin-base"}")
             println("dns       ${Settings.dns.label}")
             println("repos     ${RepositoryManager.getRepositories().size}")
             println("plugins   ${PluginManager.loaded.size} loaded, ${PluginManager.failures.size} failed")

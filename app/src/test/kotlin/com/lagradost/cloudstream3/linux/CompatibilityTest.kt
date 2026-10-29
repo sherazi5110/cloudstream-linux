@@ -2,9 +2,6 @@ package com.lagradost.cloudstream3.linux
 
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.CloudStreamApp
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.newSubtitleFile
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.zip.ZipFile
@@ -69,21 +66,6 @@ class CompatibilityTest {
         assertEquals("https://example.com/repo.json", RepositoryManager.parseRepoUrl("cloudstreamrepo://example.com/repo.json"))
         assertEquals("https://example.com/repo.json", RepositoryManager.parseRepoUrl(" https://example.com/repo.json "))
         assertEquals(null, RepositoryManager.parseRepoUrl("not a url"))
-    }
-
-    @Test
-    fun `mpv receives headers, referer, subtitles and audio tracks`() = runBlocking {
-        val link = newExtractorLink("src", "name", "https://cdn.example/v.m3u8", ExtractorLinkType.M3U8) {
-            referer = "https://site.example/"
-            headers = mapOf("X-Token" to "abc,def")
-        }
-        val subs = listOf(newSubtitleFile("en", "https://cdn.example/en.vtt"))
-        val cmd = Player.command(link, subs, "Title", "mpv")
-        assertEquals("mpv", cmd.first())
-        assertTrue("--referrer=https://site.example/" in cmd)
-        assertTrue("--http-header-fields-append=X-Token: abc,def" in cmd)
-        assertTrue("--sub-file-append=https://cdn.example/en.vtt" in cmd)
-        assertEquals("https://cdn.example/v.m3u8", cmd.last())
     }
 
     private companion object {

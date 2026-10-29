@@ -7,6 +7,20 @@ enum class ThemeMode(val label: String) {
     AMOLED("AMOLED black"),
     MIDNIGHT("Midnight blue"),
     LIGHT("Light"),
+    GLASS("Liquid glass"),
+}
+
+/** Ready-made looks: a mode plus an accent, applied together. */
+enum class ThemePreset(val label: String, val mode: ThemeMode, val accent: String) {
+    CRIMSON_NIGHT("Crimson Night", ThemeMode.DARK, "#e8194f"),
+    AURORA_GLASS("Aurora Glass", ThemeMode.GLASS, "#8b5cf6"),
+    OCEAN_GLASS("Ocean Glass", ThemeMode.GLASS, "#22b8f0"),
+    ROSE_GLASS("Rose Glass", ThemeMode.GLASS, "#f0468c"),
+    PURE_BLACK("Pure Black", ThemeMode.AMOLED, "#10b981"),
+    DEEP_SEA("Deep Sea", ThemeMode.MIDNIGHT, "#3b82f6"),
+    SUNSET_DUSK("Sunset Dusk", ThemeMode.DARK, "#f97316"),
+    PAPER("Paper", ThemeMode.LIGHT, "#e8194f"),
+    MINT_DAY("Mint Day", ThemeMode.LIGHT, "#0f9f75"),
 }
 
 enum class Accent(val label: String, val hex: String) {
@@ -57,6 +71,29 @@ object Theme {
         set(v) { prefs.edit().putString("theme_wallpaper_blur", v.toString()).apply(); changed() }
 
     val isLight get() = mode == ThemeMode.LIGHT
+    val isGlass get() = mode == ThemeMode.GLASS
+
+    fun apply(preset: ThemePreset) {
+        prefs.edit().putString("theme_mode", preset.mode.name).putString("theme_accent", preset.accent).apply()
+        changed()
+    }
+
+    /** The preset matching the current mode and accent, if any. */
+    val preset: ThemePreset? get() = ThemePreset.entries.firstOrNull { it.mode == mode && it.accent.equals(accent, true) }
+
+    /**
+     * Liquid glass backdrop when no wallpaper is set: soft light blobs in the accent and two
+     * companion colours over deep ink, which the translucent panels then frost.
+     */
+    fun glassBackdropStyle(): String {
+        val a = accent
+        return "-fx-background-color: " +
+            "radial-gradient(center 18% 12%, radius 60%, ${rgba(a, 0.72)}, ${rgba(a, 0.0)}), " +
+            "radial-gradient(center 88% 22%, radius 50%, rgba(56,189,248,0.50), rgba(56,189,248,0.0)), " +
+            "radial-gradient(center 62% 105%, radius 65%, rgba(236,72,153,0.48), rgba(236,72,153,0.0)), " +
+            "radial-gradient(center 0% 95%, radius 45%, rgba(34,211,238,0.22), rgba(34,211,238,0.0)), " +
+            "linear-gradient(to bottom right, #0b0820, #120a2c 55%, #070512);"
+    }
 
     private data class Palette(
         val bg: String, val rail: String, val surface: String, val surface2: String, val surface3: String,
@@ -67,6 +104,8 @@ object Theme {
         ThemeMode.DARK -> Palette("#0b0b10", "#101016", "#15151c", "#1d1d26", "#282832", "rgba(255,255,255,0.07)", "#f3f3f6", "#a0a0ad", "#6c6c79", "rgba(0,0,0,0.66)", "rgba(255,255,255,0.06)")
         ThemeMode.AMOLED -> Palette("#000000", "#000000", "#0b0b0d", "#131316", "#1d1d21", "rgba(255,255,255,0.08)", "#f5f5f7", "#9d9da8", "#66666f", "rgba(0,0,0,0.75)", "rgba(255,255,255,0.06)")
         ThemeMode.MIDNIGHT -> Palette("#0a0f1c", "#0d1324", "#121a2e", "#18223a", "#22304d", "rgba(160,190,255,0.10)", "#eef2fb", "#9aa6c2", "#66728e", "rgba(3,6,15,0.7)", "rgba(160,190,255,0.07)")
+        // Translucent layers: whatever is behind (glass backdrop or wallpaper) shows through.
+        ThemeMode.GLASS -> Palette("#0b0820", "rgba(255,255,255,0.09)", "rgba(255,255,255,0.075)", "rgba(255,255,255,0.11)", "rgba(255,255,255,0.17)", "rgba(255,255,255,0.16)", "#ffffff", "rgba(236,236,255,0.74)", "rgba(220,220,245,0.50)", "rgba(8,6,24,0.55)", "rgba(255,255,255,0.10)")
         ThemeMode.LIGHT -> Palette("#f4f4f7", "#ffffff", "#ffffff", "#f0f0f4", "#e3e3ea", "rgba(0,0,0,0.09)", "#15151b", "#5d5d6b", "#8a8a98", "rgba(20,20,30,0.45)", "rgba(0,0,0,0.05)")
     }
 
@@ -79,11 +118,9 @@ object Theme {
             "-cs-faint: ${p.faint}; -cs-scrim: ${p.scrim}; -cs-chip: ${p.chip}; " +
             "-cs-accent: $a; -cs-accent-hover: derive($a, 18%); -cs-accent-soft: ${rgba(a, 0.16)}; -cs-accent-glow: ${rgba(a, 0.55)}; " +
             "-cs-bg-0: ${rgba(p.bg, 0.0)}; -cs-bg-60: ${rgba(p.bg, 0.6)}; -cs-bg-85: ${rgba(p.bg, 0.85)}; -cs-bg-96: ${rgba(p.bg, 0.96)}; " +
-            "-fx-base: ${p.surface2}; -fx-control-inner-background: ${p.surface};"
+            // -fx-base feeds derive() in modena, so it must be opaque.
+            "-fx-base: ${if (isGlass) "#2a2645" else p.surface2}; -fx-control-inner-background: ${if (isGlass) "#1c1838" else p.surface};"
     }
-
-    /** Hex without '#', for mpv/uosc colour options. */
-    fun hex(color: String) = color.removePrefix("#").lowercase()
 
     fun rgba(hex: String, alpha: Double): String {
         if (hex.startsWith("rgba")) return hex

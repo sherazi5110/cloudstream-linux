@@ -11,6 +11,7 @@ import com.lagradost.cloudstream3.linux.Settings
 import javafx.geometry.Pos
 import javafx.scene.Node
 import javafx.scene.control.ProgressIndicator
+import javafx.scene.control.ScrollPane
 import javafx.scene.effect.GaussianBlur
 import javafx.scene.image.ImageView
 import javafx.scene.layout.FlowPane
@@ -103,6 +104,7 @@ class HomePage : StackPane(), Refreshable {
         Settings.lastHomeProvider = source.key
         job?.cancel()
         sections.clear()
+        (hero as? HeroSlider)?.stop()
         hero = null
         heroIndex = Int.MAX_VALUE
         loading = true
@@ -111,7 +113,12 @@ class HomePage : StackPane(), Refreshable {
             val mixed = source.apis.size > 1
             Engine.home(source.apis).collect { row ->
                 // Feature the first item of the first section, whichever order sections arrive in.
-                if (row.order < heroIndex) row.list.list.firstOrNull()?.let { hero = hero(row.api, it); heroIndex = row.order }
+                if (row.order < heroIndex && row.list.list.isNotEmpty()) {
+                    (hero as? HeroSlider)?.stop()
+                    val featured = row.list.list.take(if (Settings.heroSlider) 6 else 1)
+                    hero = if (featured.size > 1) HeroSlider(row.api, featured) else hero(row.api, featured.first())
+                    heroIndex = row.order
+                }
                 sections[row.order] = shelf(row, mixed)
                 render()
             }
@@ -169,6 +176,63 @@ class HomePage : StackPane(), Refreshable {
         const val FEED = "__feed__"
     }
 
+    /**
+     * The featured banner, rotating through several titles with a crossfade every 8 s.
+     * It only ticks while actually on screen, so a hidden home page costs nothing.
+     */
+    private inner class HeroSlider(private val api: MainAPI, private val items: List<SearchResponse>) : StackPane() {
+        private var index = 0
+        private val dots = hbox(7.0).apply {
+            alignment = Pos.CENTER
+            isPickOnBounds = false
+            // Only as big as the dots themselves, so it sits at the banner's bottom edge.
+            maxHeight = Region.USE_PREF_SIZE
+            maxWidth = Region.USE_PREF_SIZE
+        }
+        private val timer = javafx.animation.Timeline(javafx.animation.KeyFrame(javafx.util.Duration.seconds(8.0), {
+            if (onScreen()) show(index + 1)
+        })).apply { cycleCount = javafx.animation.Animation.INDEFINITE }
+
+        init {
+            minHeight = 390.0; maxHeight = 390.0
+            children += hero(api, items[0])
+            children += dots
+            StackPane.setAlignment(dots, Pos.BOTTOM_CENTER)
+            StackPane.setMargin(dots, javafx.geometry.Insets(0.0, 0.0, 16.0, 0.0))
+            renderDots()
+            timer.play()
+        }
+
+        private fun onScreen(): Boolean =
+            scene?.window?.isShowing == true && generateSequence(this as Node) { it.parent }.all { it.isVisible }
+
+        fun show(i: Int) {
+            index = (i + items.size) % items.size
+            val next = hero(api, items[index]).apply { opacity = 0.0 }
+            val old = children.firstOrNull { it !== dots }
+            children.add(children.indexOf(dots), next)
+            javafx.animation.FadeTransition(javafx.util.Duration.millis(650.0), next).apply {
+                toValue = 1.0
+                setOnFinished { old?.let { children.remove(it) } }
+                play()
+            }
+            renderDots()
+            timer.playFromStart()
+        }
+
+        private fun renderDots() {
+            dots.children.setAll(items.indices.map { i ->
+                Region().apply {
+                    styleClass += "hero-dot"
+                    if (i == index) styleClass += "active"
+                    onClick { if (i != index) show(i) }
+                }
+            })
+        }
+
+        fun stop() = timer.stop()
+    }
+
     private fun hero(api: MainAPI, item: SearchResponse): Node {
         val poster = ImageView()
         Images.load(poster, item.posterUrl, 210.0, 315.0, item.posterHeaders)
@@ -199,34 +263,77 @@ class HomePage : StackPane(), Refreshable {
     }
 }
 
-/** "View all" for one home section, with paging when the provider supports it. */
+/**
+ * "View all" for one home section. Pages load by themselves while scrolling (and while the
+ * grid doesn't fill the window yet) until the extension has nothing more.
+ */
 class GridPage(private val api: MainAPI, title: String, private val section: MainPageData, first: List<SearchResponse>) : StackPane(), Disposable {
     private val grid = FlowPane(18.0, 22.0)
     private var page = 1
-    private val more = button("Load more", Icons.REFRESH, "btn-ghost") { loadMore() }
+    private var loading = false
+    private var finished = false
+    private val seen = HashSet<String>()
+    private val spinner = ProgressIndicator().apply { setPrefSize(22.0, 22.0); setMaxSize(22.0, 22.0) }
+    private val status = label("", "muted")
+    private val retry = button("Try again", Icons.REFRESH, "btn-ghost") { loadMore() }.apply { isVisible = false; isManaged = false }
+    private val footer = hbox(10.0, spinner, status, retry).apply { alignment = Pos.CENTER; minHeight = 44.0 }
+    private val scroll: ScrollPane
     private var job: Job? = null
 
     init {
         val header = hbox(14.0, button(null, Icons.BACK, "btn-ghost") { Nav.window.back() }, label(title, "h2"), label(api.name, "tag"))
         first.forEach { add(it) }
-        children += pageScroll(vbox(24.0, header, grid, more).pad(22.0, 36.0, 40.0, 36.0))
+        scroll = pageScroll(vbox(24.0, header, grid, footer).pad(22.0, 36.0, 40.0, 36.0))
+        children += scroll
+        idle()
+        scroll.vvalueProperty().addListener { _, _, _ -> maybeLoad() }
+        scroll.viewportBoundsProperty().addListener { _, _, _ -> maybeLoad() }
+        grid.heightProperty().addListener { _, _, _ -> maybeLoad() }
     }
 
-    private fun add(item: SearchResponse) {
+    private fun add(item: SearchResponse): Boolean {
+        if (!seen.add(item.url)) return false
         grid.children += PosterCard.of(item) { Nav.open(api, item) }
+        return true
+    }
+
+    /** Loads the next page when the bottom is near: the last ~1.5 screens, or no scrolling yet. */
+    private fun maybeLoad() {
+        if (loading || finished || retry.isVisible || scene == null) return
+        val content = (scroll.content as Region).height
+        val viewport = scroll.viewportBounds.height
+        if (viewport <= 0) return
+        val below = (content - viewport) * (1 - scroll.vvalue)
+        if (below < viewport * 1.5) javafx.application.Platform.runLater { if (!loading) loadMore() }
     }
 
     private fun loadMore() {
-        more.isDisable = true
-        more.text = "Loading…"
+        if (loading || finished) return
+        loading = true
+        retry.isVisible = false; retry.isManaged = false
+        spinner.isVisible = true; spinner.isManaged = true
+        status.text = "Loading more…"
         job = ui.launch {
-            val response = Engine.homePage(api, section, ++page)
-            val items = response?.items?.flatMap { it.list }.orEmpty()
-            items.forEach { add(it) }
-            more.isDisable = false
-            more.text = "Load more"
-            more.isVisible = items.isNotEmpty() && response?.hasNext != false
+            val response = runCatching { Engine.homePage(api, section, page + 1) }.getOrNull()
+            loading = false
+            if (response == null) {
+                spinner.isVisible = false; spinner.isManaged = false
+                status.text = "Couldn't load more."
+                retry.isVisible = true; retry.isManaged = true
+                return@launch
+            }
+            page++
+            val added = response.items.flatMap { it.list }.count { add(it) }
+            // Done when the page was empty, said so, or only repeated what we already have.
+            finished = added == 0 || !response.hasNext
+            idle()
+            if (!finished) maybeLoad()
         }
+    }
+
+    private fun idle() {
+        spinner.isVisible = false; spinner.isManaged = false
+        status.text = if (finished) "That's everything · ${grid.children.size} titles" else ""
     }
 
     override fun dispose() {

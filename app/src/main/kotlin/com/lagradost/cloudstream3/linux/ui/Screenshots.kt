@@ -27,12 +27,16 @@ object Screenshots {
             delay(if (tab == Tab.HOME) 3000 else 1500)
             capture(window, "$prefix-${tab.name.lowercase()}.png")
         }
-        for (category in listOf("appearance", "playback", "developer", "storage")) {
+        for (category in listOf("appearance", "playback", "developer", "storage", "shortcuts", "about")) {
             window.openSettings(category)
             delay(1200)
             capture(window, "$prefix-settings-$category.png")
         }
-        for (mode in listOf(ThemeMode.LIGHT, ThemeMode.AMOLED)) {
+        Theme.mode = ThemeMode.GLASS
+        window.openSettings("appearance")
+        delay(1200)
+        capture(window, "$prefix-glass-settings.png")
+        for (mode in listOf(ThemeMode.LIGHT, ThemeMode.AMOLED, ThemeMode.GLASS)) {
             Theme.mode = mode
             window.show(Tab.HOME)
             delay(1500)
@@ -119,6 +123,19 @@ object Screenshots {
             delay(4000)
             capture(window, "$prefix-home-feed.png")
             com.lagradost.cloudstream3.linux.Catalogs.saveAll(mapOf(demo to before.getValue(demo).sortedBy { it.index }.map { it.copy(enabled = true) }), false, emptyList())
+        }
+        // "View all" with infinite scrolling: the Demo's Endless catalog has 4 pages of 24.
+        Engine.provider("Demo")?.let { demo ->
+            val section = demo.mainPage.first { it.data == "paged" }
+            val first = Engine.homePage(demo, section, 1)?.items?.flatMap { it.list }.orEmpty()
+            Nav.window.push(GridPage(demo, section.name, section, first))
+            delay(2500)
+            capture(window, "$prefix-grid-top.png")
+            repeat(6) {
+                (window.lookupAll(".scroll-pane").lastOrNull() as? javafx.scene.control.ScrollPane)?.vvalue = 1.0
+                delay(1200)
+            }
+            capture(window, "$prefix-grid-end.png")
         }
         delay(500)
         System.exit(0)

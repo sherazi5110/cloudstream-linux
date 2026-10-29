@@ -65,7 +65,9 @@ object Engine {
     private const val DEFAULT_TIMEOUT = 45_000L
 
     /** Sorted by name: extensions load in parallel, so registration order isn't stable. */
-    fun providers(): List<MainAPI> = APIHolder.allProviders.toList().sortedBy { it.name.lowercase() }
+    fun providers(): List<MainAPI> = APIHolder.allProviders.toList()
+        .onEach { SiteOverrides.apply(it) }
+        .sortedBy { it.name.lowercase() }
 
     fun provider(name: String): MainAPI? = providers().firstOrNull { it.name.equals(name, ignoreCase = true) }
 

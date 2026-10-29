@@ -6,6 +6,7 @@ import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.PluginManager
 import com.lagradost.cloudstream3.linux.Settings
+import com.lagradost.cloudstream3.linux.Updates
 import javafx.animation.FadeTransition
 import javafx.application.Application
 import javafx.application.Platform
@@ -37,7 +38,7 @@ import kotlin.system.exitProcess
 
 object AppInfo {
     const val NAME = "CloudStream for Linux"
-    const val VERSION = "4.0.1"
+    const val VERSION = "5.0.0"
     const val CREDIT = "Tennant Creek"
 }
 
@@ -169,16 +170,20 @@ class AppWindow(val stage: Stage) : StackPane() {
     private fun applyTheme() {
         style = Theme.rootStyle()
         scene?.fill = Color.web(Theme.background)
+        styleClass.remove("glass")
+        if (Theme.isGlass) styleClass += "glass"
         val path = Theme.wallpaper
         if (path == null) {
-            wallpaper.children.clear()
+            wallpaper.children.setAll(listOfNotNull(
+                if (Theme.isGlass) Region().apply { style = Theme.glassBackdropStyle(); isMouseTransparent = true } else null,
+            ))
             return
         }
         val view = ImageView(Image(File(path).toURI().toString(), 1920.0, 1080.0, true, true, true)).apply {
             isPreserveRatio = false
             fitWidthProperty().bind(this@AppWindow.widthProperty())
             fitHeightProperty().bind(this@AppWindow.heightProperty())
-            if (Theme.wallpaperBlur) effect = GaussianBlur(28.0)
+            if (Theme.wallpaperBlur || Theme.isGlass) effect = GaussianBlur(if (Theme.isGlass) 40.0 else 28.0)
         }
         val dim = Region().apply { styleClass += "wallpaper-dim"; opacity = Theme.wallpaperDim }
         wallpaper.children.setAll(view, dim)
@@ -240,7 +245,7 @@ class AppWindow(val stage: Stage) : StackPane() {
         return true
     }
 
-    /** While mpv draws over the window, hide everything else so JavaFX does no work. */
+    /** While the player fills the window, hide everything else so JavaFX does no extra work. */
     fun enterPlayer(surface: Node) {
         layout.isVisible = false
         overlay.isVisible = false
@@ -286,6 +291,13 @@ class AppWindow(val stage: Stage) : StackPane() {
             if (Settings.autoUpdateExtensions) {
                 val updated = withContext(Engine.dispatcher) { runCatching { PluginManager.updateAll() }.getOrDefault(emptyList()) }
                 if (updated.isNotEmpty()) Toasts.show("Updated ${updated.joinToString()}")
+            }
+            if (Settings.checkUpdates && System.currentTimeMillis() - Updates.lastCheck > 20 * 3600_000L &&
+                System.getenv("CS_SCREENSHOT") == null) {
+                Updates.lastCheck = System.currentTimeMillis()
+                runCatching { Updates.check(AppInfo.VERSION) }.getOrNull()?.let { r ->
+                    Toasts.show("CloudStream ${r.version} is available", "Download" to { openUrl(r.url) }, 15.0)
+                }
             }
             Screenshots.runIfRequested(this@AppWindow)
         }

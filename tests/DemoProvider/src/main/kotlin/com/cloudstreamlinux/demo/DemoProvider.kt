@@ -36,9 +36,11 @@ class DemoProvider : MainAPI() {
     override var lang = "en"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
-    override val mainPage = mainPageOf("series" to "Trending series", "movies" to "Popular movies", "classics" to "Silent classics")
+    override val mainPage = mainPageOf("series" to "Trending series", "movies" to "Popular movies", "classics" to "Silent classics", "paged" to "Endless catalog")
 
     private class Title(val id: String, val name: String, val year: Int, val series: Boolean, val plot: String, val score: Double)
+
+    private val PAGES = 4
 
     private val titles = listOf(
         Title("pixel_city", "Pixel City", 2024, true, "In a city rendered one scanline at a time, a detective chases a missing frame through the compression underworld.", 8.4),
@@ -57,18 +59,23 @@ class DemoProvider : MainAPI() {
 
     private fun poster(id: String) = "$mainUrl/media/poster_$id.jpg"
 
-    private fun toSearch(t: Title): SearchResponse = if (t.series) {
-        newTvSeriesSearchResponse(t.name, "$mainUrl/title/${t.id}", TvType.TvSeries) {
+    private fun toSearch(t: Title, copy: String = ""): SearchResponse = if (t.series) {
+        newTvSeriesSearchResponse(t.name, "$mainUrl$copy/title/${t.id}", TvType.TvSeries) {
             posterUrl = poster(t.id); score = Score.from10(t.score); quality = SearchQuality.HD
         }
     } else {
-        newMovieSearchResponse(t.name, "$mainUrl/title/${t.id}", TvType.Movie) {
+        newMovieSearchResponse(t.name, "$mainUrl$copy/title/${t.id}", TvType.Movie) {
             posterUrl = poster(t.id); year = t.year; score = Score.from10(t.score)
             quality = if (t.year > 1950) SearchQuality.HD else SearchQuality.SD
         }
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        // A catalog with several pages (24 titles each), for testing infinite scrolling.
+        if (request.data == "paged") {
+            val items = (0 until 24).map { i -> titles[(page * 24 + i) % titles.size].let { toSearch(it, "/p$page-$i") } }
+            return newHomePageResponse(request.name, items, hasNext = page < PAGES)
+        }
         val list = when (request.data) {
             "series" -> titles.filter { it.series }
             "movies" -> titles.filter { !it.series && it.year >= 1940 }

@@ -114,8 +114,39 @@ class PlaybackFeaturesTest {
         assertEquals("Spanish", results[2].languageName)
         assertTrue(OnlineSubtitles.matches("eng", "en"))
         assertTrue(OnlineSubtitles.matches("spa", "Spanish"))
+        assertTrue(OnlineSubtitles.matches("eng", "ar, en"))
+        assertTrue(!OnlineSubtitles.matches("fre", "ar,en"))
         val file = OnlineSubtitles.download(results[2])
         assertTrue(file.readText().contains("Subtítulo en línea"))
+    }
+
+    @Test
+    fun `update check compares versions and site addresses can be overridden`() = runBlocking {
+        assertTrue(Updates.newer("V4.0.2", "4.0.1"))
+        assertTrue(Updates.newer("v5.0", "4.9.9"))
+        assertTrue(!Updates.newer("V4.0.1", "4.0.1"))
+        assertTrue(!Updates.newer("4.0", "4.0.1"))
+
+        val api = demo()
+        val original = api.mainUrl
+        try {
+            SiteOverrides.set(api, "https://moved.example/")
+            assertEquals("https://moved.example", Engine.provider(api.name)!!.mainUrl)
+            SiteOverrides.set(api, "not a url")
+            assertEquals(original, Engine.provider(api.name)!!.mainUrl)
+        } finally {
+            SiteOverrides.set(api, null)
+        }
+    }
+
+    @Test
+    fun `posters from TMDB are fetched at the size shown`() {
+        val images = com.lagradost.cloudstream3.linux.ui.Images
+        assertEquals("https://image.tmdb.org/t/p/w342/a.jpg", images.tmdbSized("https://image.tmdb.org/t/p/original/a.jpg", 315.0))
+        assertEquals("https://image.tmdb.org/t/p/w500/a.jpg", images.tmdbSized("https://image.tmdb.org/t/p/w780/a.jpg", 420.0))
+        assertEquals(null, images.tmdbSized("https://image.tmdb.org/t/p/w185/a.jpg", 315.0)) // already small
+        assertEquals(null, images.tmdbSized("https://image.tmdb.org/t/p/original/a.jpg", 1600.0)) // big backdrops stay
+        assertEquals(null, images.tmdbSized("https://example.com/t/p/original/a.jpg", 315.0))
     }
 
     @Test
@@ -188,6 +219,12 @@ class PlaybackFeaturesTest {
             assertTrue(time.get() >= 1500, "time stuck at ${time.get()}")
             assertEquals(480, width.get())
             assertTrue(subtitleTracks.get() >= 1, "subtitle file not added")
+            // Equalizer presets and screenshots (the player's Audio menu and camera button).
+            assertTrue("Rock" in factory.equalizer().presets())
+            player.audio().setEqualizer(factory.equalizer().newEqualizer("Rock"))
+            val shot = File.createTempFile("cs-shot", ".png").apply { delete(); deleteOnExit() }
+            assertTrue(player.snapshots().save(shot), "snapshot failed")
+            assertTrue(shot.length() > 1000, "snapshot is empty")
             // Seeking (what the player's seek bar and source switching do).
             player.controls().setTime(60_000)
             Thread.sleep(2500)

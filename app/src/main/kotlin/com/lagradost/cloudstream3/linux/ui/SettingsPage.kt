@@ -6,11 +6,12 @@ import com.lagradost.cloudstream3.linux.DnsProvider
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.Logs
 import com.lagradost.cloudstream3.linux.Network
-import com.lagradost.cloudstream3.linux.Player
 import com.lagradost.cloudstream3.linux.PluginManager
 import com.lagradost.cloudstream3.linux.ProviderTest
 import com.lagradost.cloudstream3.linux.RepositoryManager
 import com.lagradost.cloudstream3.linux.Settings
+import com.lagradost.cloudstream3.linux.SiteOverrides
+import com.lagradost.cloudstream3.linux.Updates
 import com.lagradost.cloudstream3.linux.StorageInfo
 import javafx.geometry.Pos
 import javafx.scene.Node
@@ -45,6 +46,7 @@ class SettingsPage : StackPane(), Refreshable {
         Category("extensions", "Extensions", Icons.EXTENSION, ::extensions),
         Category("developer", "Developer & logs", Icons.CODE, ::developer),
         Category("storage", "Storage", Icons.STORAGE, ::storage),
+        Category("shortcuts", "Keyboard shortcuts", Icons.KEYBOARD, ::shortcuts),
         Category("about", "About", Icons.INFO, ::about),
     )
 
@@ -156,6 +158,25 @@ class SettingsPage : StackPane(), Refreshable {
     // ---------- categories ----------
 
     private fun appearance(): List<Node> {
+        val presets = FlowPane(10.0, 10.0).apply {
+            ThemePreset.entries.forEach { p ->
+                val bg = when (p.mode) {
+                    ThemeMode.GLASS -> "linear-gradient(to bottom right, ${p.accent}, #0b0820 70%)"
+                    ThemeMode.LIGHT -> "#f4f4f7"
+                    ThemeMode.AMOLED -> "#000000"
+                    ThemeMode.MIDNIGHT -> "#0a0f1c"
+                    ThemeMode.DARK -> "#0b0b10"
+                }
+                val dot = Region().apply { style = "-fx-background-color: ${p.accent}; -fx-background-radius: 999;"; setMinSize(14.0, 14.0); setMaxSize(14.0, 14.0) }
+                val text = label(p.label, "bold").apply { style = "-fx-text-fill: ${if (p.mode == ThemeMode.LIGHT) "#15151b" else "white"};" }
+                children += hbox(8.0, dot, text).apply {
+                    styleClass += "preset-card"
+                    if (Theme.preset == p) styleClass += "selected"
+                    style = "-fx-background-color: $bg;"
+                    onClick { Theme.apply(p); open("appearance") }
+                }
+            }
+        }
         val modes = FlowPane(12.0, 12.0).apply {
             ThemeMode.entries.forEach { m ->
                 val preview = when (m) {
@@ -163,6 +184,7 @@ class SettingsPage : StackPane(), Refreshable {
                     ThemeMode.AMOLED -> "#000000" to "#131316"
                     ThemeMode.MIDNIGHT -> "#0a0f1c" to "#18223a"
                     ThemeMode.LIGHT -> "#f4f4f7" to "#ffffff"
+                    ThemeMode.GLASS -> "linear-gradient(to bottom right, #6d28d9, #0ea5e9 60%, #ec4899)" to "rgba(255,255,255,0.28)"
                 }
                 val swatch = StackPane(Region().apply {
                     style = "-fx-background-color: ${preview.second}; -fx-background-radius: 6;"
@@ -206,9 +228,17 @@ class SettingsPage : StackPane(), Refreshable {
         }
         return listOf(
             section("Theme",
-                row("Mode", "Dark, true-black AMOLED (saves power on OLED screens), midnight blue, or light.", Region()),
+                row("Presets", "One click for a matching mode and accent colour.", Region()),
+                presets.pad(0.0, 0.0, 12.0, 0.0),
+                row("Mode", "Dark, true-black AMOLED (saves power on OLED screens), midnight blue, light, or liquid glass (translucent panels over a soft colour backdrop or your wallpaper).", Region()),
                 modes.pad(0.0, 0.0, 12.0, 0.0),
                 row("Accent colour", "Buttons, highlights and the player's progress bar. Enter a hex colour for your own.", accents),
+            ),
+            section("Home & details",
+                row("Featured slider", "Rotate the big banner on Home through the first catalog's top titles.",
+                    Switch(Settings.heroSlider) { Settings.heroSlider = it }),
+                row("Anti-spoiler mode", "Blur thumbnails and hide descriptions of episodes you haven't watched yet.",
+                    Switch(Settings.antiSpoiler) { Settings.antiSpoiler = it }),
             ),
             section("Background",
                 row("Wallpaper", wallpaper?.let { File(it).name } ?: "Show your own image behind the app.",
@@ -234,28 +264,15 @@ class SettingsPage : StackPane(), Refreshable {
     }
 
     private fun playback(): List<Node> {
-        val installed = Player.installed()
-        val players = listOf("builtin", "mpv", "vlc", "ffplay")
         val vlcEngine = Vlc.factory != null
-        fun playerName(p: String) = when (p) {
-            "builtin" -> "Built-in (in the app)"
-            "mpv" -> "mpv in its own window"
-            "vlc" -> "VLC app"
-            else -> p
-        } + when {
-            p == "builtin" && !vlcEngine -> " — needs VLC"
-            p != "builtin" && p !in installed -> " — not installed"
-            else -> ""
-        }
         val qualities = listOf(0, 2160, 1440, 1080, 720, 480)
         return listOf(
             section("Player",
-                row("Video player", if (!vlcEngine) "The built-in player uses VLC's engine, which isn't installed — run: sudo apt install vlc" else
-                    "The built-in player plays inside this window using VLC ${Vlc.version.orEmpty()}: every format VLC plays, hardware decoding, source switching, online subtitles, audio languages, speed and zoom.",
-                    combo(players, Settings.player, ::playerName) { Settings.player = it }),
-                row("Battery saver", "For low-end PCs and laptops on battery: skips the H.264 deblocking filter (much less CPU), buffers longer and does no extra processing. Hardware decoding stays on. Restart the app to apply.",
-                    Switch(Settings.batterySaver) { Settings.batterySaver = it }),
-                row("Extra mpv options", "Only for the mpv player. Passed to mpv as-is, e.g. --volume=80", textSetting(Settings.mpvArgs, "--volume=80") { Settings.mpvArgs = it }),
+                row("Player engine", if (!vlcEngine) "VLC's libraries aren't installed, so videos can't play. Run: sudo apt install libvlc5 vlc-plugin-base" else
+                    "Videos play inside this window using VLC ${Vlc.version.orEmpty()}: every format VLC plays, hardware decoding, source switching, online subtitles, audio languages, speed and zoom.",
+                    label(if (vlcEngine) "Ready" else "Not installed", if (vlcEngine) "good-text" else "error-text")),
+                row("Battery saver", "For low-end PCs and laptops on battery: skips the H.264 deblocking filter (much less CPU), buffers longer and does no extra processing. Hardware decoding stays on.",
+                    Switch(Settings.batterySaver) { Settings.batterySaver = it; Vlc.optionsChanged(Playback.active != null) }),
             ),
             section("Sources",
                 row("Auto-play best source", "Start the best source automatically instead of picking from the list.",
@@ -270,7 +287,42 @@ class SettingsPage : StackPane(), Refreshable {
                     Switch(Settings.autoPlayNext) { Settings.autoPlayNext = it }),
                 row("Subtitle languages", "Language codes to turn on automatically, e.g. en or ar,en. Empty = subtitles off by default.",
                     textSetting(Settings.subtitleLanguage, "en") { Settings.subtitleLanguage = it }),
+                row("Audio languages", "Picked automatically when a stream has several, e.g. ja for original anime audio, or en. Empty = the stream's default.",
+                    textSetting(Settings.audioLanguage, "en") { Settings.audioLanguage = it }),
             ),
+            subtitleStyle(),
+        )
+    }
+
+    /** Subtitle look, with a live preview. VLC applies it from the next video on. */
+    private fun subtitleStyle(): Node {
+        val sample = Label("The quick brown fox jumps over the lazy dog")
+        fun refresh() {
+            val px = when (Settings.subtitleSize) { "SMALL" -> 17; "LARGE" -> 27; "HUGE" -> 34; else -> 21 }
+            val outline = Settings.subtitleOutline
+            sample.style = "-fx-font-size: ${px}px; -fx-font-weight: bold; -fx-text-fill: ${Settings.subtitleColor};" +
+                (if (outline > 0) " -fx-effect: dropshadow(gaussian, black, ${outline * 1.6}, 0.9, 0, 0);" else "") +
+                (if (Settings.subtitleBackground) " -fx-background-color: rgba(0,0,0,0.67); -fx-padding: 2 8 2 8;" else "")
+        }
+        fun changed() { refresh(); Vlc.optionsChanged(Playback.active != null) }
+        refresh()
+        val preview = StackPane(sample).apply { styleClass += "subtitle-preview"; alignment = Pos.BOTTOM_CENTER }
+        val colors = hbox(8.0).apply {
+            listOf("#ffffff", "#fff176", "#80deea", "#a5d6a7", "#ffab91").forEach { c ->
+                children += Region().apply {
+                    styleClass += "swatch"; style = "-fx-background-color: $c;"
+                    if (Settings.subtitleColor.equals(c, true)) styleClass += "selected"
+                    onClick { Settings.subtitleColor = c; changed(); open("playback") }
+                }
+            }
+        }
+        return section("Subtitle style",
+            preview.pad(4.0, 0.0, 8.0, 0.0),
+            row("Size", null, combo(listOf("SMALL", "NORMAL", "LARGE", "HUGE"), Settings.subtitleSize, { it.lowercase().replaceFirstChar(Char::uppercase) }) { Settings.subtitleSize = it; changed() }),
+            row("Colour", null, colors),
+            row("Outline", "A dark edge keeps text readable on bright scenes.",
+                combo(listOf(0, 2, 4, 6), Settings.subtitleOutline, { when (it) { 0 -> "None"; 2 -> "Thin"; 4 -> "Normal"; else -> "Thick" } }) { Settings.subtitleOutline = it; changed() }),
+            row("Background box", "A dark box behind the text.", Switch(Settings.subtitleBackground) { Settings.subtitleBackground = it; changed() }),
         )
     }
 
@@ -324,7 +376,30 @@ class SettingsPage : StackPane(), Refreshable {
                     Toasts.show("Cleared — restart to re-translate")
                 }),
         ),
+        siteAddresses(),
     )
+
+    /** Point an extension at a new domain when its site moves (until the extension is updated). */
+    private fun siteAddresses(): Node {
+        val apis = Engine.providers().filter { it.mainUrl.startsWith("http") }
+        val rows = apis.map { api ->
+            val original = SiteOverrides.original(api)
+            val field = TextField(SiteOverrides.get(api) ?: "").apply { promptText = original; prefWidth = 300.0 }
+            val save = {
+                SiteOverrides.set(api, field.text.takeIf { it.isNotBlank() })
+                Toasts.show(if (field.text.isBlank()) "${api.name} uses its own address again" else "${api.name} now uses ${api.mainUrl}")
+            }
+            field.setOnAction { save() }
+            row(api.name, "Default: $original", hbox(8.0, field,
+                button("Save", null, "btn-ghost", "btn-small") { save() },
+                button(null, Icons.REFRESH, "btn-ghost", "btn-small") { field.clear(); save() }.tooltip("Use the default address"),
+            ))
+        }
+        return section("Site addresses",
+            row("When a site moves", "Streaming sites often change domain before their extension is updated. Enter the new address (e.g. https://newsite.example) to keep using the extension.", Region()),
+            *rows.ifEmpty { listOf(label("No extensions installed.", "muted")) }.toTypedArray(),
+        )
+    }
 
     private fun developer(): List<Node> {
         val tests = VBox(8.0)
@@ -437,22 +512,102 @@ class SettingsPage : StackPane(), Refreshable {
             section("Space used", *rows.toTypedArray()),
             section("Folders",
                 row("App data", AppDirs.data.absolutePath, button("Open", Icons.FOLDER, "btn-ghost", "btn-small") { openFolder(AppDirs.data) }),
-                row("mpv configuration", "mpv profile and player UI used by the mpv player",
-                    button("Open", Icons.FOLDER, "btn-ghost", "btn-small") { openFolder(File(AppDirs.data, "mpv")) }),
+            ),
+            section("Reset",
+                row("Reset settings", "Theme, player, network, home and site-address settings go back to defaults. Extensions, repositories, library and history are kept.",
+                    button("Reset settings", Icons.REFRESH, "btn-ghost", "btn-small") {
+                        if (!confirm("Reset all settings to their defaults?")) return@button
+                        listOf("linux_settings", "home_catalogs", "site_overrides").forEach {
+                            com.lagradost.cloudstream3.linux.Platform.context.getSharedPreferences(it, 0).edit().clear().apply()
+                        }
+                        Theme.mode = Theme.mode // re-applies the (default) theme
+                        Toasts.show("Settings reset. Restart the app to finish.")
+                    }),
+                row("Erase everything", "Deletes all extensions, repositories, library, history, settings and caches, then closes the app. This can't be undone.",
+                    button("Erase all data", Icons.DELETE, "btn-danger", "btn-small") {
+                        if (!confirm("Erase ALL CloudStream data (extensions, library, history, settings)? This can't be undone.")) return@button
+                        AppDirs.data.listFiles()?.forEach { it.deleteRecursively() }
+                        kotlin.system.exitProcess(0)
+                    }),
             ),
         )
     }
+
+    private fun confirm(text: String): Boolean =
+        javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION, text,
+            javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL).apply {
+            headerText = null
+            dialogPane.stylesheets += SettingsPage::class.java.getResource("/ui/theme.css")!!.toExternalForm()
+        }.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL) == javafx.scene.control.ButtonType.OK
 
     private fun about(): List<Node> = listOf(
         section("CloudStream for Linux",
             row("Version ${AppInfo.VERSION}", "Runs CloudStream extensions from the same repositories as the Android app. Free software under GPL-3.0.",
                 label("v${AppInfo.VERSION}", "tag", "accent")),
             row("Made by", AppInfo.CREDIT, label("", "muted")),
-            row("Built on", "The upstream CloudStream library, libVLC through vlcj (built-in player), mpv and uosc (mpv player UI, LGPL-2.1), JavaFX. Online subtitles: OpenSubtitles via the Stremio addon protocol.", label("", "muted")),
+            row("Built on", "The upstream CloudStream library, libVLC through vlcj (player), JavaFX. Online subtitles: OpenSubtitles via the Stremio addon protocol.", label("", "muted")),
         ),
-        section("Keyboard",
-            row("Anywhere", "/ or Ctrl+F search · Esc back · Alt+← back · F11 fullscreen", label("", "muted")),
-            row("In the player", "Space/K pause · ←/→ seek 10 s (Shift: 1 min) · ↑/↓ volume · M mute · F full screen · S sources · C subtitles · A audio language · Z zoom · [ ] speed · G/H subtitle delay · 0–9 jump · N next episode · Esc back", label("", "muted")),
+        section("Updates",
+            row("Check for updates", "Looks for a newer release on GitHub.", updateButton()),
+            row("Check automatically", "Once a day when the app starts.", Switch(Settings.checkUpdates) { Settings.checkUpdates = it }),
+            row("Release notes", Updates.RELEASES, button("Open", Icons.FILE, "btn-ghost", "btn-small") { openUrl(Updates.RELEASES) }),
         ),
     )
+
+    private fun updateButton(): Node {
+        val status = label("", "muted", "small")
+        val check = button("Check now", Icons.REFRESH, "btn-ghost", "btn-small") {}
+        check.setOnAction {
+            check.isDisable = true
+            status.text = "Checking…"
+            ui.launch {
+                val result = runCatching { Updates.check(AppInfo.VERSION) }
+                check.isDisable = false
+                result.fold({ r ->
+                    if (r == null) status.text = "You have the latest version (${AppInfo.VERSION})"
+                    else {
+                        status.text = "Version ${r.version} is available"
+                        openUrl(r.url)
+                    }
+                }, { status.text = "Couldn't check: ${it.message ?: it}" })
+            }
+        }
+        return hbox(10.0, status, check)
+    }
+
+    /** Every shortcut in one searchable list. */
+    private fun shortcuts(): List<Node> {
+        val all = listOf(
+            Triple("Anywhere", "/  or  Ctrl+F", "Search"),
+            Triple("Anywhere", "Esc  or  Alt+←", "Back / close"),
+            Triple("Anywhere", "F11", "Full screen"),
+            Triple("Player", "Space  or  K", "Play / pause"),
+            Triple("Player", "←  /  →  (J / L)", "Seek 10 seconds"),
+            Triple("Player", "Shift + ←  /  →", "Seek 1 minute"),
+            Triple("Player", "↑  /  ↓  or mouse wheel", "Volume"),
+            Triple("Player", "M", "Mute"),
+            Triple("Player", "F  or double-click", "Full screen"),
+            Triple("Player", "S", "Sources"),
+            Triple("Player", "C", "Subtitles (and online search)"),
+            Triple("Player", "A", "Audio language and equalizer"),
+            Triple("Player", "Z", "Cycle zoom (fit, fill, stretch, …)"),
+            Triple("Player", "[  /  ]", "Slower / faster"),
+            Triple("Player", "G  /  H", "Subtitles earlier / later"),
+            Triple("Player", "0 – 9", "Jump to 0 % – 90 %"),
+            Triple("Player", "Home", "Back to the start"),
+            Triple("Player", "Shift + S", "Screenshot to Pictures/CloudStream"),
+            Triple("Player", "N", "Next episode"),
+        )
+        val list = VBox()
+        fun render(q: String) {
+            val shown = all.filter { q.isBlank() || it.second.contains(q, true) || it.third.contains(q, true) || it.first.contains(q, true) }
+            list.children.setAll(shown.map { (scope, keys, action) ->
+                row(action, scope, label(keys, "kbd"))
+            }.ifEmpty { listOf(label("No shortcut matches “$q”.", "muted")) })
+        }
+        render("")
+        val search = TextField().apply { promptText = "Filter shortcuts (e.g. volume, subtitles, seek)"; styleClass += "search-field" }
+        search.textProperty().addListener { _, _, v -> render(v.trim()) }
+        return listOf(search, vbox(10.0, label("SHORTCUTS", "section-label"), list.apply { styleClass += "card"; pad(4.0, 18.0) }))
+    }
 }

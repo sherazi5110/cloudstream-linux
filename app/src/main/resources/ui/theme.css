@@ -500,3 +500,58 @@
 .player-menu-row .accent-icon { -fx-background-color: -cs-accent; }
 .player-menu-item { -fx-text-fill: white; -fx-font-size: 13.5px; }
 .player-menu-hint { -fx-text-fill: rgba(255,255,255,0.55); -fx-font-size: 11.5px; }
+
+/* ---------- theme presets ---------- */
+.preset-card {
+    -fx-background-radius: 12;
+    -fx-border-color: rgba(255,255,255,0.10); -fx-border-radius: 12;
+    -fx-padding: 12 16 12 14;
+    -fx-min-width: 170;
+    -fx-cursor: hand;
+}
+.preset-card:hover { -fx-border-color: -cs-accent-glow; }
+.preset-card.selected { -fx-border-color: -cs-accent; -fx-border-width: 2; }
+
+/* ---------- liquid glass ----------
+   JavaFX can't blur what's behind a panel, so the backdrop is soft (gradients or a blurred
+   wallpaper) and panels are translucent with a bright top edge, a faint inner sheen and a
+   soft shadow: the cues that read as glass. */
+.glass .card, .glass .sheet, .glass .dock, .glass .ext-card, .glass .provider-card,
+.glass .catalog-row, .glass .source-row, .glass .mode-card, .glass .toast, .glass .status-pill,
+.glass .settings-nav-item:selected, .glass .text-field, .glass .search-field, .glass .combo-box {
+    -fx-border-color: linear-gradient(to bottom, rgba(255,255,255,0.42), rgba(255,255,255,0.10) 40%, rgba(255,255,255,0.05));
+}
+.glass .card, .glass .sheet, .glass .ext-card, .glass .provider-card, .glass .dock {
+    -fx-background-color:
+        linear-gradient(to bottom, rgba(255,255,255,0.13), rgba(255,255,255,0.05) 45%, rgba(255,255,255,0.03)),
+        -cs-surface;
+    -fx-effect: dropshadow(gaussian, rgba(4,2,20,0.45), 28, 0.12, 0, 10);
+}
+.glass .sheet { -fx-background-color: linear-gradient(to bottom, rgba(40,32,80,0.86), rgba(20,14,44,0.90)); }
+.glass .dock { -fx-background-radius: 26; -fx-border-radius: 26; }
+.glass .btn-ghost, .glass .chip {
+    -fx-background-color: linear-gradient(to bottom, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
+    -fx-border-color: rgba(255,255,255,0.22);
+}
+.glass .chip.selected, .glass .btn-accent {
+    -fx-background-color: linear-gradient(to bottom, derive(-cs-accent, 25%), -cs-accent);
+    -fx-effect: dropshadow(gaussian, -cs-accent-glow, 16, 0.2, 0, 3);
+}
+.glass .poster-frame { -fx-effect: dropshadow(gaussian, rgba(4,2,20,0.55), 18, 0.15, 0, 8); }
+.glass .combo-box-popup .list-view { -fx-background-color: #1c1838; }
+.player-clock { -fx-text-fill: rgba(255,255,255,0.85); -fx-font-size: 13px; -fx-padding: 0 6 0 0; }
+.subtitle-preview {
+    -fx-background-color: linear-gradient(to bottom right, #1f2937, #0f172a 60%, #312e81);
+    -fx-background-radius: 12; -fx-min-height: 120; -fx-pref-height: 120; -fx-padding: 0 0 16 0;
+}
+.hero-dot {
+    -fx-background-color: rgba(255,255,255,0.35); -fx-background-radius: 999;
+    -fx-min-width: 8; -fx-min-height: 8; -fx-max-width: 8; -fx-max-height: 8; -fx-cursor: hand;
+}
+.hero-dot:hover { -fx-background-color: rgba(255,255,255,0.7); }
+.hero-dot.active { -fx-background-color: -cs-accent; -fx-min-width: 24; -fx-max-width: 24; }
+.kbd {
+    -fx-background-color: -cs-chip; -fx-background-radius: 7;
+    -fx-border-color: -cs-line; -fx-border-radius: 7; -fx-border-width: 1 1 2 1;
+    -fx-padding: 4 10 4 10; -fx-font-family: "monospace"; -fx-font-size: 12px; -fx-text-fill: -cs-text;
+}

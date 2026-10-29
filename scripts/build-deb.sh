@@ -28,8 +28,6 @@ Priority: optional
 Architecture: $ARCH
 Installed-Size: $(du -sk "$STAGE" | cut -f1)
 Depends: libgtk-3-0t64 | libgtk-3-0, libgl1, libx11-6, libxtst6, libvlc5, vlc-plugin-base
-Recommends: mpv
-Suggests: vlc, ffmpeg
 Maintainer: cloudstream-linux <cloudstream-linux@users.noreply.github.com>
 Homepage: https://github.com/recloudstream/cloudstream
 Description: Run CloudStream extensions on Linux

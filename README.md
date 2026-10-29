@@ -7,13 +7,15 @@ Run **CloudStream extensions on Ubuntu/Linux**, from the same repositories the A
 - **Built-in player, VLC inside the app:** libVLC decodes (every format VLC plays, hardware-accelerated when available) and the video is drawn inside the app window, so it works on X11, Wayland and ChromeOS alike. It has its own controls:
   - switch sources mid-playback, keeping your place; a failed source falls back to the next one automatically;
   - subtitles from the extension, **from the internet (OpenSubtitles, no account)** or from a file, with timing adjustment;
-  - audio language, speed 0.25–2×, and zoom (Fit, Fill, Stretch, Original, 16:9, 4:3, 21:9);
-  - a seek bar with time preview, volume up to 150%, next episode, full screen and keyboard shortcuts.
+  - audio language (picked automatically if you set a preference), an **equalizer**, speed 0.25–2×, and zoom (Fit, Fill, Stretch, Original, 16:9, 4:3, 21:9);
+  - subtitle styling (size, colour, outline, background box) with a live preview;
+  - a seek bar with time preview, a clock with "ends at" time, **screenshots**, volume up to 200%, next episode, full screen and keyboard shortcuts.
 
-  A header proxy lets streams that need tokens or cookies play. Battery saver suits low-end PCs. mpv, VLC and ffplay are still available as separate windows.
+  A header proxy lets streams that need tokens or cookies play. Battery saver suits low-end PCs.
 - **Catalogs your way:** for each extension, turn its home catalogs on or off and reorder them (drag or arrows), or **combine several extensions into one feed**.
 - **Loading screen:** shows artwork, a live source count, *Play now* (at your preferred quality), *Choose source* and *Cancel*.
-- **Your look:** Dark, AMOLED black, Midnight blue and Light themes, seven accent colours or any hex colour, and your own wallpaper behind the app with dim and blur.
+- **Your look:** **Liquid glass**, Dark, AMOLED black, Midnight blue and Light themes, nine one-click presets, any accent colour, and your own wallpaper behind the app with dim and blur. A featured slider on Home and an **anti-spoiler mode** for episodes.
+- **Upkeep:** an update check, new site addresses for extensions whose site moved, and reset options.
 - **Library:** bookmarks (My List), history, per-episode progress, *Resume* and *Continue Watching*.
 - **Network:** DNS-over-HTTPS (Cloudflare, Google, AdGuard, Quad9…) with automatic fallback to system DNS, persistent cookies, IPv4-first, and an HTTP cache.
 - **Developer tools:** per-extension test (home → search → details → sources), a static Linux compatibility check, a log viewer, and storage/cache management.
@@ -49,9 +51,9 @@ repo.json → plugins.json → Extension.cs3 ──dex2jar──► JVM classes 
 |---|---|
 | `cs-library/` | Builds upstream `library/` (`commonMain` + `jvmCommonMain` + `jvmMain`) and NiceHttp **from source**. Extensions link against the exact classes they were compiled for. |
 | `android-shim/` | Linux implementations of the Android and app-module classes extensions call, with identical names and signatures. Extensions inline `getKey<T>()`, so signatures must match exactly. |
-| `app/` | Repository manager, `.cs3` translator, parallel plugin loader, streaming engine, network (DoH/cache), header proxy, online subtitles, catalogs, mpv IPC bridge, library store, CLI, and the JavaFX UI (`ui/`, including the libVLC player). |
+| `app/` | Repository manager, `.cs3` translator, parallel plugin loader, streaming engine, network (DoH/cache), header proxy, online subtitles, catalogs, library store, CLI, and the JavaFX UI (`ui/`, including the libVLC player). |
 | `examples/InternetArchiveProvider/` | A complete extension (public-domain films from archive.org), built **both** as a real Dalvik `.cs3` and as a `.jar`, plus a ready-to-host `repo.json`. |
-| `tests/` | Offline demo extension (series, slow host, dead host, token-protected HLS), mock site (with stand-ins for the subtitle services), fake mpv — used by the tests and screenshot tour. |
+| `tests/` | Offline demo extension (series, slow host, dead host, token-protected HLS), mock site (with stand-ins for the subtitle services) — used by the tests and screenshot tour. |
 
 ## Install
 
@@ -60,7 +62,7 @@ repo.json → plugins.json → Extension.cs3 ──dex2jar──► JVM classes 
 ### Build from source (Ubuntu 22.04+)
 
 ```bash
-sudo apt install openjdk-21-jdk git libvlc5 vlc-plugin-base   # + mpv if you want the mpv player
+sudo apt install openjdk-21-jdk git libvlc5 vlc-plugin-base
 git clone <this repo> cloudstream-linux && cd cloudstream-linux
 ./scripts/fetch-upstream.sh        # pinned CloudStream + NiceHttp sources
 ./scripts/install.sh               # ~/.local install, app-menu entry, cloudstreamrepo:// handler
@@ -99,7 +101,6 @@ cloudstream-linux home "<Provider>"
 cloudstream-linux search "big buck bunny"
 cloudstream-linux info  "<Provider>" <url>
 cloudstream-linux links "<Provider>" <url> --item 3
-cloudstream-linux play  "<Provider>" <url> --item 3 --player mpv
 cloudstream-linux key set <key> <value>                     # extension settings (see below)
 cloudstream-linux doctor                                    # diagnostics to include in bug reports
 ```
@@ -113,7 +114,7 @@ Data lives in `~/.local/share/cloudstream-linux` (override with `CLOUDSTREAM_HOM
 - **`requiresResources`:** Android resource tables aren't decoded; such extensions get an empty `Resources`.
 - **WebView-based extensions** (e.g. Cloudflare challenges) don't work yet. Upstream's own JVM `WebViewResolver` is still unimplemented; the Sources panel says so when this is the cause.
 - Logs are in `~/.local/share/cloudstream-linux/logs/` (Settings → Storage → Logs); please attach `cloudstream.log` and `cloudstream-linux doctor` output to bug reports.
-- **YouTube** links: VLC's own YouTube support breaks often; choose the mpv player (Settings → Playback), which resolves them with yt-dlp. Upstream uses NewPipe, which is only published on JitPack.
+- **YouTube** links (mostly trailers) depend on VLC's own YouTube support, which breaks often. Upstream uses NewPipe, which is only published on JitPack.
 - **Torrents** need `webtorrent-cli`.
 - Any other Android class an extension touches gets a placeholder. The extension loads, but calling that code throws. Run with `CS_LOG_LEVEL=3` for debug logs.
 
@@ -132,7 +133,7 @@ In a real recloudstream/gradle project, set `cloudstream { isCrossPlatform = tru
 
 ```bash
 ./gradlew :app:installDist && app/build/install/cloudstream-linux/bin/cloudstream-linux
-./gradlew :app:test                 # extensions, Android shims, sources with a dead host, header proxy, online subtitles, catalogs, libVLC playback, mpv IPC
+./gradlew :app:test                 # extensions, Android shims, sources with a dead host, header proxy, online subtitles, catalogs and libVLC playback
 python3 -I tests/mock-archive/server.py 8766   # local mock site for the demo/example extensions
 
 # Scripted screenshot tour (any X display or xvfb-run):
@@ -148,6 +149,6 @@ The upstream versions are pinned in `scripts/fetch-upstream.sh` (`CS_COMMIT`, `N
 
 GPL-3.0, the same as CloudStream, whose library sources this project compiles.
 
-The built-in player uses [libVLC](https://www.videolan.org/vlc/libvlc.html) (LGPL-2.1, from your system's VLC packages) through [vlcj](https://github.com/caprica/vlcj) (GPL-3.0). Online subtitles come from the OpenSubtitles Stremio addon. The mpv player's UI is [uosc](https://github.com/tomasklaen/uosc) 5.13.0 (LGPL-2.1), bundled in `app/src/main/resources/mpv/scripts/uosc` with two small robustness fixes listed in `VENDORED.txt`.
+The built-in player uses [libVLC](https://www.videolan.org/vlc/libvlc.html) (LGPL-2.1, from your system's VLC packages) through [vlcj](https://github.com/caprica/vlcj) (GPL-3.0). Online subtitles come from the OpenSubtitles Stremio addon.
 
 Made by Tennant Creek.
