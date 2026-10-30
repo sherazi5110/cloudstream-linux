@@ -158,21 +158,25 @@ object ContentFilter {
 
     val active get() = filter != null
 
+    /** Adult content is shown only to grown-up profiles that turned it on (Settings → Profiles). */
+    val nsfwAllowed get() = !Profiles.isKids && Settings.showNsfw
+
     fun allows(api: MainAPI): Boolean {
+        if (TvType.NSFW in api.supportedTypes && !nsfwAllowed) return false
         val f = filter ?: return true
-        if (TvType.NSFW in api.supportedTypes) return false
         return api.name in f.extensions
     }
 
     fun allows(item: SearchResponse): Boolean {
+        if (item.type == TvType.NSFW && !nsfwAllowed) return false
         val f = filter ?: return true
-        if (item.type == TvType.NSFW) return false
         if (item.type != null && item.type!!.name !in f.types) return false
         return !hasBlockedWord(f, item.name)
     }
 
     /** For a details page: rating, type, title, tags and plot. */
     fun allows(response: LoadResponse): Boolean {
+        if (response.type == TvType.NSFW && !nsfwAllowed) return false
         val f = filter ?: return true
         if (response.type == TvType.NSFW || response.type.name !in f.types) return false
         val age = response.contentRating?.let(::ageOf)

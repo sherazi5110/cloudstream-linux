@@ -56,6 +56,9 @@ Read this first when continuing work on CloudStream for Linux.
      `/webpage`, Cinemeta meta. Tests: `LiveTvMetadataTest` (23 tests in all). Short tours: `CS_SCREENSHOT_ONLY=v601`,
      `kids`, `logos` (+ `-Dcs.tmdb.base=…` etc. pointing at the mock). Note: JUnit skips test functions that don't
      return Unit (`= runBlocking { … }` ending in a non-Unit expression).
+- **6.0.1 update** (branch `v6.0.1-nsfw`, same version number, released by re-tagging V6.0.1): `Settings.showNsfw` (per profile, off by default) like Android's NSFW setting;
+  `ContentFilter.nsfwAllowed` hides NSFW extensions/items/details, adult Live TV groups, and NSFW extensions in the
+  Extensions list (installed ones stay). Turning it on: confirm + parent PIN if set.
 - Previous version (`v5`, now released) did:
   1. **VLC is the only player.** mpv (+ uosc UI, IPC), and the external VLC/ffplay launchers were removed.
      The CLI `play` command went with them. The player is `ui/BuiltinPlayer.kt` + `ui/VlcVideo.kt`.

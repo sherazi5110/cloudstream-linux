@@ -177,7 +177,11 @@ class ExtensionsPage : StackPane(), Refreshable {
         val lang = language.value?.substringAfterLast('(')?.removeSuffix(")")?.takeIf { language.selectionModel.selectedIndex > 0 }
         val repo = repoFilter.value?.takeIf { repoFilter.selectionModel.selectedIndex > 0 }
         val typeSet = TYPE_FILTERS.getOrNull(types.selected)?.second
+        // Adult (NSFW) extensions stay out of the list unless turned on in Settings → Profiles; installed ones stay manageable.
+        val nsfw = com.lagradost.cloudstream3.linux.ContentFilter.nsfwAllowed
+        val hiddenAdult = rows.count { it.installed == null && "NSFW" in it.wrapper?.plugin?.tvTypes.orEmpty() && !nsfw }
         this.rows = rows.filter { row ->
+            (nsfw || row.installed != null || "NSFW" !in row.wrapper?.plugin?.tvTypes.orEmpty()) &&
             (query.isEmpty() || row.name.lowercase().contains(query) || row.wrapper?.plugin?.description.orEmpty().lowercase().contains(query)) &&
                 (lang == null || row.wrapper?.plugin?.language == lang) &&
                 (repo == null || row.wrapper?.repository?.name == repo) &&
@@ -192,7 +196,8 @@ class ExtensionsPage : StackPane(), Refreshable {
         renderGrid()
         val loaded = Engine.allProviders().size
         if (!loadingRepos) stats.text = "${available.size} available · ${installed.size} installed · $loaded providers loaded" +
-            (PluginManager.failures.size.takeIf { it > 0 }?.let { " · $it failed" } ?: "")
+            (PluginManager.failures.size.takeIf { it > 0 }?.let { " · $it failed" } ?: "") +
+            (if (hiddenAdult > 0) " · $hiddenAdult adult (NSFW) hidden, see Settings → Profiles" else "")
     }
 
     /** Renders cards a page at a time: big repositories list hundreds of extensions. */

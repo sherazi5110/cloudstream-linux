@@ -33,6 +33,15 @@ object Screenshots {
             capture(window, "$prefix-theme-dark.png")
             System.exit(0)
         }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "nsfw") {
+            window.openSettings("profiles")
+            delay(1500)
+            capture(window, "$prefix-settings-nsfw.png")
+            window.lookupAll(".switch").firstOrNull()?.let { javafx.event.Event.fireEvent(it, click()) }
+            delay(800)
+            capture(window, "$prefix-settings-nsfw-confirm.png")
+            System.exit(0)
+        }
         if (System.getenv("CS_SCREENSHOT_ONLY") == "logos") {
             System.setProperty("cs.logos.base", "http://localhost:8766/logos-api")
             runCatching { com.lagradost.cloudstream3.linux.LiveTv.add(com.lagradost.cloudstream3.linux.LiveTv.Kind.M3U, "http://localhost:8766/iptv/playlist.m3u", "Free-TV", "http://localhost:8766/iptv/guide.xml") }
