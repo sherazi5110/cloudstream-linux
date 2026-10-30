@@ -142,6 +142,9 @@ object LiveTv {
 
     private val kidsGroups = Regex("kid|child|cartoon|anim|family|junior|enfant|infantil|niñ|kinder", RegexOption.IGNORE_CASE)
 
+    /** Playlist groups with adult channels, hidden unless adult content is turned on. */
+    private val adultGroups = Regex("xxx|adult|18\\+|porn|erotic", RegexOption.IGNORE_CASE)
+
     val availableToProfile: Boolean get() = !Profiles.isKids || allowKids
 
     fun isTvType(type: String) = type == "tv" || type == "channel"
@@ -154,7 +157,11 @@ object LiveTv {
     suspend fun channels(sourceId: String? = null, force: Boolean = false): List<Channel> = withContext(Dispatchers.IO) {
         val chosen = sources().filter { it.enabled && (sourceId == null || it.id == sourceId) }
         val all = coroutineScope { chosen.map { s -> async { runCatching { load(s, force) }.onFailure { System.err.println("W/livetv: ${s.name}: $it") }.getOrDefault(emptyList()) } }.awaitAll() }.flatten()
-        if (Profiles.isKids) all.filter { kidsGroups.containsMatchIn(it.group.orEmpty()) || kidsGroups.containsMatchIn(it.name) } else all
+        when {
+            Profiles.isKids -> all.filter { kidsGroups.containsMatchIn(it.group.orEmpty()) || kidsGroups.containsMatchIn(it.name) }
+            !ContentFilter.nsfwAllowed -> all.filter { !adultGroups.containsMatchIn(it.group.orEmpty()) }
+            else -> all
+        }
     }
 
     private suspend fun load(source: Source, force: Boolean): List<Channel> {

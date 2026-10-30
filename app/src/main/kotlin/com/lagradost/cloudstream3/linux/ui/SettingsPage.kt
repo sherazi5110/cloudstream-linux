@@ -184,6 +184,9 @@ class SettingsPage : StackPane(), Refreshable {
         return listOf(
             section("Profiles", list, row("Manage profiles", "Add, edit or delete profiles; set avatars, PINs and kids profiles.",
                 button("Manage profiles", Icons.PEOPLE, "btn-ghost") { Nav.window.showOverlay(ProfilePicker(startup = false, manage = true)) })),
+            section("Adult content",
+                row("Show adult (NSFW) content", "Extensions and titles marked NSFW, and adult Live TV groups. Off by default, like the Android app. " +
+                    "Only for this profile; kids profiles never see it.", Switch(Settings.showNsfw) { on -> setNsfw(on) })),
             section("Kids",
                 row("Parent PIN", if (Profiles.hasParentPin) "Needed to leave a kids profile. Change it here (you'll need the current one)."
                     else "Not set yet. It's created when you make a kids profile, or set one now.",
@@ -195,6 +198,24 @@ class SettingsPage : StackPane(), Refreshable {
                 "Each profile has its own history, continue watching, list, home layout, theme and player preferences (subtitles, audio, volume). " +
                     "Extensions, Stremio add-ons, network and storage settings are shared by everyone.", "muted").apply { isWrapText = true; pad(10.0, 0.0) }),
         )
+    }
+
+    /** Turning adult content on needs a confirmation (and the parent PIN, if one is set); off is immediate. */
+    private fun setNsfw(on: Boolean) {
+        val done = { value: Boolean ->
+            Settings.showNsfw = value
+            PluginManager.bumpVersion()
+            open("profiles")
+        }
+        if (!on) return done(false)
+        open("profiles") // shows it off until confirmed
+        Nav.window.showOverlay(ConfirmSheet("Show adult content?",
+            "Adult (18+) extensions and titles will show on Home, in Search and in Extensions for this profile. Only turn this on if you're an adult.",
+            "I'm 18+, show it") {
+            if (Profiles.hasParentPin) javafx.application.Platform.runLater {
+                Nav.window.showOverlay(PinPrompt("Enter the parent PIN") { p -> Profiles.checkParentPin(p).also { if (it) javafx.application.Platform.runLater { done(true) } } })
+            } else done(true)
+        })
     }
 
     /** Current PIN (if any) → new PIN → repeat, each in the PIN pad. */

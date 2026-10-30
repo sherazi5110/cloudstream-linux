@@ -27,7 +27,7 @@ object Settings {
     private val PROFILE_KEYS = setOf(
         "auto_play_next", "subtitle_language", "preferred_quality", "player_volume", "hero_slider", "anti_spoiler",
         "player_equalizer", "audio_language", "subtitle_size", "subtitle_color", "subtitle_outline", "subtitle_background",
-        "player_zoom", "last_home_provider",
+        "player_zoom", "last_home_provider", "show_nsfw",
         "theme_mode", "theme_accent", "theme_wallpaper", "theme_wallpaper_dim", "theme_wallpaper_blur",
     )
 
@@ -136,6 +136,14 @@ object Settings {
     var playerZoom: String
         get() = string("player_zoom", "FIT")
         set(v) = put("player_zoom", v)
+
+    /**
+     * Show adult (NSFW) extensions and titles, like the Android app's setting. Off by default,
+     * per profile, never in kids profiles.
+     */
+    var showNsfw: Boolean
+        get() = string("show_nsfw", "false") == "true"
+        set(v) = put("show_nsfw", v)
 
     var lastHomeProvider: String?
         get() = string("last_home_provider", "").ifBlank { null }

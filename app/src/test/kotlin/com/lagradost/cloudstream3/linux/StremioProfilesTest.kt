@@ -148,6 +148,15 @@ class StremioProfilesTest {
         assertEquals(null, Profiles.unlockFor(Profiles.all().first { it.id == kids.id }), "going to a kids profile is free")
         assertEquals(listOf("Pixel City"), Library.history().map { it.name })
         assertTrue(ContentFilter.allows(horror))
+        // Adult content: hidden by default for grown-ups too, shown once turned on, never for kids.
+        assertFalse(ContentFilter.allows(nsfw))
+        Settings.showNsfw = true
+        assertTrue(ContentFilter.allows(nsfw))
+        Profiles.switchTo(kids.id)
+        assertFalse(ContentFilter.allows(nsfw), "kids never see adult content")
+        Profiles.switchTo(adult.id)
+        Settings.showNsfw = false
+        assertFalse(ContentFilter.allows(nsfw))
         Library.removeHistory(entry.apiName, entry.url)
     }
 }
