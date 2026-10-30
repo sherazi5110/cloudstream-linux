@@ -33,6 +33,43 @@ object Screenshots {
             capture(window, "$prefix-theme-dark.png")
             System.exit(0)
         }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "logos") {
+            System.setProperty("cs.logos.base", "http://localhost:8766/logos-api")
+            runCatching { com.lagradost.cloudstream3.linux.LiveTv.add(com.lagradost.cloudstream3.linux.LiveTv.Kind.M3U, "http://localhost:8766/iptv/playlist.m3u", "Free-TV", "http://localhost:8766/iptv/guide.xml") }
+            window.show(Tab.LIVE)
+            delay(5000)
+            capture(window, "$prefix-livetv-logos.png")
+            window.openSettings("livetv")
+            delay(1000)
+            capture(window, "$prefix-settings-livetv.png")
+            com.lagradost.cloudstream3.linux.LiveTv.saved().forEach { com.lagradost.cloudstream3.linux.LiveTv.remove(it.id) }
+            System.exit(0)
+        }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "kids") {
+            // The only profile set to kids, before parent PINs existed: the way out.
+            val me = com.lagradost.cloudstream3.linux.Profiles.current
+            com.lagradost.cloudstream3.linux.Profiles.update(me.copy(kids = true, filter = me.filter.copy(extensions = setOf("Demo"))))
+            delay(3000)
+            (window.lookup(".topbar-profile") as? javafx.scene.Node)?.let { javafx.event.Event.fireEvent(it, click()) }
+            delay(700)
+            capture(window, "$prefix-kids-menu.png")
+            clickPopover(window, "Exit kids profile")
+            delay(2500)
+            capture(window, "$prefix-kids-exited.png")
+            // Making a kids profile now asks for a parent PIN.
+            window.showOverlay(ProfileEditor(null))
+            delay(800)
+            window.lookupAll(".switch").lastOrNull()?.let { javafx.event.Event.fireEvent(it, click()) }
+            delay(800)
+            (window.lookup(".sheet")?.lookup(".scroll-pane") as? javafx.scene.control.ScrollPane)?.vvalue = 0.62
+            delay(700)
+            capture(window, "$prefix-kids-parent-pin.png")
+            System.exit(0)
+        }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "v601") {
+            v601Tour(window, prefix)
+            System.exit(0)
+        }
         if (System.getenv("CS_SCREENSHOT_ONLY") == "v6") {
             window.show(Tab.HOME)
             delay(3000)
@@ -164,11 +201,8 @@ object Screenshots {
 
     /** Sections, profiles, the kids profile and a Stremio add-on (v6). */
     private suspend fun v6Tour(window: AppWindow, prefix: String) {
-        window.showSection(Section.MOVIES)
-        delay(2500)
-        capture(window, "$prefix-section-movies.png")
-        window.showSection(Section.HOME)
-        delay(2000)
+        window.show(Tab.HOME)
+        delay(1500)
         (window.lookup(".topbar-profile") as? javafx.scene.Node)?.let { javafx.event.Event.fireEvent(it, click()) }
         delay(600)
         capture(window, "$prefix-profile-menu.png")
@@ -229,6 +263,68 @@ object Screenshots {
         listOf(sara.id, kids.id).forEach { com.lagradost.cloudstream3.linux.Profiles.delete(it) }
         Settings.lastHomeProvider = "Demo"
         delay(1500)
+    }
+
+    /** Live TV, watched controls and the metadata hub (6.0.1). Uses the mock server on port 8766. */
+    private suspend fun v601Tour(window: AppWindow, prefix: String) {
+        val m = "http://localhost:8766"
+        window.show(Tab.HOME)
+        delay(3500)
+        capture(window, "$prefix-home.png")
+        // Hover a Continue Watching card and open its ⋯ menu.
+        window.lookupAll(".poster-card").firstOrNull { it is WideCard }?.let { card ->
+            javafx.event.Event.fireEvent(card, javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_ENTERED, 0.0, 0.0, 0.0, 0.0,
+                javafx.scene.input.MouseButton.NONE, 0, false, false, false, false, false, false, false, false, false, false, null))
+            delay(400)
+            (card as javafx.scene.Parent).lookupAll(".card-action").lastOrNull()?.let { javafx.event.Event.fireEvent(it, click()) }
+        }
+        delay(600)
+        capture(window, "$prefix-continue-menu.png")
+        window.closeOverlay()
+
+        com.lagradost.cloudstream3.linux.Metadata.tmdbKey = "0123456789abcdef0123456789abcdef"
+        runCatching { com.lagradost.cloudstream3.linux.LiveTv.add(com.lagradost.cloudstream3.linux.LiveTv.Kind.M3U, "$m/iptv/playlist.m3u", "Free-TV", "$m/iptv/guide.xml") }
+            .onFailure { System.err.println("tour: m3u failed: $it") }
+        runCatching { com.lagradost.cloudstream3.linux.StremioAddons.install("$m/addon-tv") }.onFailure { System.err.println("tour: tv add-on failed: $it") }
+        window.show(Tab.LIVE)
+        delay(4000)
+        capture(window, "$prefix-livetv.png")
+        (window.lookupAll(".scroll-pane").firstOrNull { it.parent?.parent is LiveTvPage || it.parent is LiveTvPage } as? javafx.scene.control.ScrollPane)?.vvalue = 0.5
+        delay(800)
+        capture(window, "$prefix-livetv-rows.png")
+        (window.lookup(".topbar-field") as? javafx.scene.control.TextField)?.text = "news"
+        delay(1200)
+        capture(window, "$prefix-livetv-search.png")
+        (window.lookup(".topbar-field") as? javafx.scene.control.TextField)?.text = ""
+        window.openSettings("livetv")
+        delay(1500)
+        capture(window, "$prefix-settings-livetv.png")
+        window.openSettings("metadata")
+        delay(1200)
+        capture(window, "$prefix-settings-metadata.png")
+        window.openSettings("tmdb")
+        delay(1200)
+        capture(window, "$prefix-settings-tmdb.png")
+        Nav.open("Demo", "$m/title/night_of_the_test_pattern", "Night of the Test Pattern", null)
+        delay(5000)
+        capture(window, "$prefix-details-tmdb.png")
+        (window.lookupAll(".scroll-pane").lastOrNull() as? javafx.scene.control.ScrollPane)?.vvalue = 1.0
+        delay(1200)
+        capture(window, "$prefix-details-tmdb-cast.png")
+        window.back()
+        window.show(Tab.HOME)
+        delay(4000)
+        capture(window, "$prefix-home-tmdb.png")
+        window.show(Tab.LIBRARY)
+        delay(800)
+        (window.lookup(".chip-group") as? javafx.scene.Parent)
+        window.lookupAll(".chip").firstOrNull { (it as? javafx.scene.control.Label)?.text == "History" }?.let { javafx.event.Event.fireEvent(it, click()) }
+        delay(800)
+        capture(window, "$prefix-library-history.png")
+        // Clean up the sources this tour added.
+        com.lagradost.cloudstream3.linux.LiveTv.saved().forEach { com.lagradost.cloudstream3.linux.LiveTv.remove(it.id) }
+        com.lagradost.cloudstream3.linux.StremioAddons.all().forEach { com.lagradost.cloudstream3.linux.StremioAddons.remove(it.url) }
+        com.lagradost.cloudstream3.linux.Metadata.tmdbKey = ""
     }
 
     private fun click() = javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_CLICKED,

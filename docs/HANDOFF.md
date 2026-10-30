@@ -12,7 +12,8 @@ Read this first when continuing work on CloudStream for Linux.
      Menus are `Popover`s drawn in the window (not popup windows) so they follow the theme. Pages implementing
      `TopBarActions` put controls in the bar (Home's source picker). Home's `Hero` is full-width under the bar,
      loads each featured title's details for backdrop/logo/plot, and fades out with a gradient clip.
-  2. **Logo** (`ui/Logo.kt`, `packaging/linux/cloudstream-linux.svg|png`): "SC" (Inter Display Black outlines)
+  2. **Logo** (`ui/Logo.kt`, `packaging/linux/cloudstream-linux.svg|png`; redrawn in 6.0.1 as a big "C" with an "s"
+     inside, see below): letters from Inter Display Black outlines
      over a white cloud on black; letters take the accent colour in the app and the window icon.
   3. **Profiles** (`Profiles.kt`, `ui/ProfilesUi.kt`, `ui/Avatars.kt`): per-profile prefs files `library`,
      `home_catalogs`, `profile_settings` (default profile = the original files; others `<file>@<id>`).
@@ -25,6 +26,36 @@ Read this first when continuing work on CloudStream for Linux.
   5. **Fonts**: Inter (OFL, subset) in `resources/ui/fonts`, loaded in `DesktopApp.start`.
   6. Fixed: `Shelf` rows could stay squashed when cards arrived after the first layout (viewport now measures
      its row instead of binding to its height).
+- Branch **`v6.0.1`** (on top of `v6`), version **6.0.1**:
+  1. **Top bar without the section tabs** (the `Section` enum is gone). Pages put controls in the bar via
+     `TopBarActions` (`hasOwnSearch` hides the global Search button). **Live TV** tab (`Tab.LIVE`) below Home.
+  2. **Live TV** (`LiveTv.kt`, `ui/LiveTvPage.kt`): sources in prefs `livetv_sources`: M3U (address or `file:` URL,
+     optional XMLTV guide), Xtream Codes, plus Stremio add-ons whose catalogs are `tv`/`channel` (those catalogs are
+     excluded from `StremioApi`, so they never reach Home/Search). HTML pages are refused as playlists; GitHub blob
+     links become raw links. Channel lists cached in `cache/livetv/<id>.json`; guides parsed with StAX (gz ok),
+     now/next only (no grid yet). Favourites/recent per profile (`livetv@<profile>`). Playback via `LiveApi`
+     (data = channel JSON) or the add-on's `StremioApi`; the player doesn't record Live in history. Kids see Live TV
+     only if allowed, and then only child-like groups.
+     **Channel logos** load via `Images.image()` (OkHttp, WebP) with a fallback to the iptv-org database
+     (`ChannelLogos`: by tvg-id, then name; iptv-org.github.io, else raw.githubusercontent.com/iptv-org/api/gh-pages;
+     cached a week). A Kodi add-on zip importer was tried and removed at the owner's request.
+  3. **Watched controls**: `Library.markWatched/markUnwatched/isWatched`; `WideCard` takes `CardAction`s
+     (✓ / ✕ / ⋯ popover); history rows and the details page toggle.
+  4. **Metadata hub** (`Metadata.kt`, Settings → Metadata & integrations, sub-page `tmdb`): user's TMDB key (v3 key
+     or v4 token), `cleanTitle()` strips release-name junk, matching by IMDb id (/find) or title+year search, 7-day
+     disk cache incl. misses, 4 requests at a time. Cinemeta for IMDb ratings, AniList GraphQL for anime. Used by
+     poster cards (lazy badge), the Home banner and the details page (rating pills, logo, cast photos, trailer →
+     YouTube in the browser, similar titles → Search).
+  5. **Parent PIN** (`Profiles.setParentPin/checkParentPin/unlockFor`, salted SHA-256): created in the profile
+     editor when the first kids profile is made; needed to leave a kids profile ("Exit kids profile" in the menu and
+     picker) unless the grown-up target has its own PIN. The last grown-up profile can't become a kids profile.
+     Profiles stuck as kids from 6.0.0 (no parent PIN) can exit freely; if no grown-up exists, it turns back.
+  6. **Logo** redrawn: a big "C" with a small "s" inside over the cloud (black outline drawn under the letters).
+  7. Icons whose paths start with two invisible corner dots keep their proportions (`Icons.MORE`, chevrons, `EXPAND`).
+  8. Mocks in `server.py`: `/iptv/`, `/xtream/`, `/addon-tv/`, `/tmdb/3/` (key `0123…cdef`), `/anilist`, `/logos-api/`,
+     `/webpage`, Cinemeta meta. Tests: `LiveTvMetadataTest` (23 tests in all). Short tours: `CS_SCREENSHOT_ONLY=v601`,
+     `kids`, `logos` (+ `-Dcs.tmdb.base=…` etc. pointing at the mock). Note: JUnit skips test functions that don't
+     return Unit (`= runBlocking { … }` ending in a non-Unit expression).
 - Previous version (`v5`, now released) did:
   1. **VLC is the only player.** mpv (+ uosc UI, IPC), and the external VLC/ffplay launchers were removed.
      The CLI `play` command went with them. The player is `ui/BuiltinPlayer.kt` + `ui/VlcVideo.kt`.
@@ -43,7 +74,7 @@ Read this first when continuing work on CloudStream for Linux.
      extension says `hasNext = false` (Demo's "Endless catalog" has 4 pages for testing). **Posters on slow
      connections** (`Images`): disk cache read without waiting for a download slot, 12 slots, posters that left
      the screen give their slot up, TMDB images fetched at the shown width, one retry, shorter timeouts.
-- Tests: `./gradlew test`, 19 tests, all passing (libVLC must be installed for the playback test).
+- Tests: `./gradlew test`, 22 tests, all passing (libVLC must be installed for the playback test).
 
 ## How the owner works
 
@@ -75,8 +106,8 @@ the subtitles part (OpenSubtitles v3 + Cinemeta). Suggested design:
 
 Not done yet, roughly by value: Cloudflare solver (JavaFX WebView implementing `WebViewResolver`; note
 javafx-web adds a lot of size), downloads for offline viewing, Discord "now watching", AniSkip
-(skip intro), richer details page (redesign like the new Home banner; trailers and similar titles via
-Cinemeta), rename catalog rows, UI zoom, extension tabs with update history, more subtitle providers
+(skip intro), a TV guide grid for Live TV, "wrong match? search TMDB" on the title page, details page
+redesign like the Home banner, rename catalog rows, UI zoom, extension tabs with update history, more subtitle providers
 (SubDL/Subsource need API keys), open a local video file, RPM/AppImage packages.
 
 ## Upkeep (see the owner's question about the app ageing)

@@ -23,6 +23,7 @@ import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.scene.shape.Rectangle
 import javafx.util.Duration
+import kotlinx.coroutines.launch
 
 const val POSTER_W = 152.0
 const val POSTER_H = 228.0
@@ -64,6 +65,8 @@ class PosterCard(
     progress: Double? = null,
     width: Double = POSTER_W,
     height: Double = POSTER_H,
+    /** Looks up a score (TMDB/AniList) once the card is on screen; shown at the bottom left. */
+    rating: (suspend () -> String?)? = null,
     onOpen: () -> Unit,
 ) : VBox() {
     init {
@@ -82,6 +85,19 @@ class PosterCard(
             topLeft?.let { children += label(it, "badge").also { b -> StackPane.setAlignment(b, Pos.TOP_LEFT); StackPane.setMargin(b, javafx.geometry.Insets(8.0)) } }
             topRight?.let { children += label(it, "badge", "accent").also { b -> StackPane.setAlignment(b, Pos.TOP_RIGHT); StackPane.setMargin(b, javafx.geometry.Insets(8.0)) } }
             if (progress != null && progress > 0) children += progressBar(progress, width).also { StackPane.setAlignment(it, Pos.BOTTOM_LEFT) }
+            if (rating != null) {
+                val badge = label("", "tmdb-badge").apply {
+                    isVisible = false
+                    StackPane.setAlignment(this, Pos.BOTTOM_LEFT); StackPane.setMargin(this, javafx.geometry.Insets(8.0))
+                }
+                children += badge
+                var started = false
+                sceneProperty().addListener { _, _, scene ->
+                    if (scene == null || started) return@addListener
+                    started = true
+                    ui.launch { rating()?.let { badge.text = it; badge.isVisible = true } }
+                }
+            }
             children += Region().apply { styleClass += "poster-ring"; setMinSize(width, height) }
         }
         roundedClip(frame, 10.0)
@@ -100,6 +116,10 @@ class PosterCard(
             item.name, item.posterUrl, item.posterHeaders,
             topLeft = item.score?.toDouble(10)?.takeIf { it > 0 }?.let { "★ %.1f".format(it) },
             topRight = qualityText(item.quality),
+            rating = if (com.lagradost.cloudstream3.linux.Metadata.posterRatings &&
+                (com.lagradost.cloudstream3.linux.Metadata.hasTmdb || com.lagradost.cloudstream3.linux.Metadata.anilist)) {
+                { com.lagradost.cloudstream3.linux.Metadata.posterRating(item) }
+            } else null,
             onOpen = onOpen,
         )
     }
@@ -115,8 +135,14 @@ fun progressBar(value: Double, width: Double, height: Double = 4.0): Node {
     return StackPane(track, fill).apply { alignment = Pos.CENTER_LEFT; setMaxSize(width, height) }
 }
 
-/** 16:9 card with a title overlay, for Continue Watching. */
-class WideCard(title: String, subtitle: String?, imageUrl: String?, progress: Double?, onOpen: () -> Unit) : StackPane() {
+/** A small round button shown on a card when hovered. */
+data class CardAction(val icon: String, val tooltip: String, val action: (javafx.scene.Node) -> Unit)
+
+/** 16:9 card with a title overlay, for Continue Watching; [actions] appear at the top right on hover. */
+class WideCard(
+    title: String, subtitle: String?, imageUrl: String?, progress: Double?,
+    actions: List<CardAction> = emptyList(), onOpen: () -> Unit,
+) : StackPane() {
     init {
         val w = 300.0
         val h = 169.0
@@ -143,8 +169,27 @@ class WideCard(title: String, subtitle: String?, imageUrl: String?, progress: Do
         roundedClip(frame, 12.0)
         children += frame
         frame.hoverGrow(1.03)
-        setOnMouseEntered { FadeTransition(Duration.millis(150.0), play).apply { toValue = 1.0 }.play() }
-        setOnMouseExited { FadeTransition(Duration.millis(150.0), play).apply { toValue = 0.0 }.play() }
+        val buttons = HBox(6.0).apply {
+            maxWidth = Region.USE_PREF_SIZE; maxHeight = Region.USE_PREF_SIZE
+            opacity = 0.0
+            StackPane.setAlignment(this, Pos.TOP_RIGHT); StackPane.setMargin(this, javafx.geometry.Insets(10.0))
+            actions.forEach { a ->
+                children += StackPane(icon(a.icon, 16.0)).apply {
+                    styleClass += "card-action"
+                    tooltip(a.tooltip)
+                    setOnMouseClicked { it.consume(); a.action(this) }
+                }
+            }
+        }
+        if (actions.isNotEmpty()) frame.children += buttons
+        setOnMouseEntered {
+            FadeTransition(Duration.millis(150.0), play).apply { toValue = 1.0 }.play()
+            FadeTransition(Duration.millis(150.0), buttons).apply { toValue = 1.0 }.play()
+        }
+        setOnMouseExited {
+            FadeTransition(Duration.millis(150.0), play).apply { toValue = 0.0 }.play()
+            FadeTransition(Duration.millis(150.0), buttons).apply { toValue = 0.0 }.play()
+        }
         onClick(onOpen)
     }
 }

@@ -99,6 +99,18 @@ object Images {
         return view.scene == null && view.properties[SHOWN] == true
     }
 
+    /**
+     * [url] decoded to cover [w]×[h] without cropping (show it with preserveRatio), e.g. a
+     * channel logo. Null when it can't be downloaded or decoded (SVG, broken links).
+     */
+    suspend fun image(url: String, w: Double, h: Double): Image? {
+        val key = "fit:$url@${w.toInt()}x${h.toInt()}"
+        synchronized(memory) { memory[key] }?.let { return it }
+        val image = withContext(Dispatchers.IO) { fetch(url, null, w * scale, h * scale) { true } } ?: return null
+        synchronized(memory) { memory[key] = image }
+        return image
+    }
+
     private fun show(view: ImageView, image: Image, w: Double, h: Double) {
         view.image = image
         // Center-crop to the target aspect ratio.

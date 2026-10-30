@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.PluginManager
+import com.lagradost.cloudstream3.linux.LiveTv
 import com.lagradost.cloudstream3.linux.Profiles
 import com.lagradost.cloudstream3.linux.Settings
 import com.lagradost.cloudstream3.linux.Updates
@@ -39,7 +40,7 @@ import kotlin.system.exitProcess
 
 object AppInfo {
     const val NAME = "CloudStream for Linux"
-    const val VERSION = "6.0.0"
+    const val VERSION = "6.0.1"
     const val CREDIT = "Tennant Creek"
 }
 
@@ -86,6 +87,7 @@ class DesktopApp : Application() {
 
 enum class Tab(val label: String, val icon: String, val forKids: Boolean = true) {
     HOME("Home", Icons.HOME),
+    LIVE("Live TV", Icons.TV),
     SEARCH("Search", Icons.SEARCH),
     LIBRARY("My list", Icons.LIBRARY),
     EXTENSIONS("Extensions & add-ons", Icons.EXTENSION, forKids = false),
@@ -95,6 +97,9 @@ enum class Tab(val label: String, val icon: String, val forKids: Boolean = true)
 /** A page that puts its own controls in the top bar (e.g. Home's source picker). */
 interface TopBarActions {
     fun topBarActions(): List<Node>
+
+    /** True when the page has its own search box (the top bar's Search button is hidden). */
+    val hasOwnSearch: Boolean get() = false
 }
 
 /**
@@ -170,7 +175,7 @@ class AppWindow(val stage: Stage) : StackPane() {
         rail.children.setAll(StackPane(logo).apply { pad(2.0, 0.0, 18.0, 0.0); onClick { show(Tab.HOME) } })
         navItems.clear()
         val kids = Profiles.isKids
-        Tab.entries.filter { !kids || it.forKids }.forEach { tab ->
+        Tab.entries.filter { (!kids || it.forKids) && (it != Tab.LIVE || LiveTv.availableToProfile) }.forEach { tab ->
             if (tab == Tab.SETTINGS) rail.children += spacer()
             val item = StackPane(icon(tab.icon, 22.0)).apply {
                 styleClass += "rail-item"
@@ -235,6 +240,7 @@ class AppWindow(val stage: Stage) : StackPane() {
     private fun page(tab: Tab): Node = pages.getOrPut(tab) {
         when (tab) {
             Tab.HOME -> HomePage()
+            Tab.LIVE -> LiveTvPage()
             Tab.SEARCH -> SearchPage()
             Tab.LIBRARY -> LibraryPage()
             Tab.EXTENSIONS -> ExtensionsPage()
@@ -244,6 +250,7 @@ class AppWindow(val stage: Stage) : StackPane() {
 
     fun show(tab: Tab) {
         if (Profiles.isKids && !tab.forKids) return
+        if (tab == Tab.LIVE && !LiveTv.availableToProfile) return
         backStack.forEach { (it as? Disposable)?.dispose() }
         backStack.clear()
         navItems[currentTab]?.styleClass?.remove("active")
@@ -257,17 +264,16 @@ class AppWindow(val stage: Stage) : StackPane() {
     /** Shows a page under the top bar; Home's banner runs underneath it, other pages start below. */
     private fun setContent(node: Node) {
         content.children.setAll(node)
-        val fullBleed = node is HomePage
+        val fullBleed = node is HomePage || node is LiveTvPage
         content.padding = if (fullBleed) Insets.EMPTY else Insets(TopBar.HEIGHT, 0.0, 0.0, 0.0)
         topBar.setSolid(!fullBleed)
         topBar.pageChanged(node, currentTab)
     }
 
-    /** Opens Home on one of its sections (Movies, Series…). */
-    fun showSection(section: Section) {
-        show(Tab.HOME)
-        (pages[Tab.HOME] as? HomePage)?.setSection(section)
-        topBar.pageChanged(pages[Tab.HOME]!!, Tab.HOME)
+    /** Opens Search with [query] already running (e.g. a similar title from TMDB). */
+    fun search(query: String) {
+        show(Tab.SEARCH)
+        (pages[Tab.SEARCH] as? SearchPage)?.run(query)
     }
 
     /** Opens a settings category directly. */

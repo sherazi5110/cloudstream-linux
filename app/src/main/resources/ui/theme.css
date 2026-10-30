@@ -709,3 +709,42 @@
 .glass .topbar.solid { -fx-background-color: rgba(18,12,40,0.78); -fx-border-color: transparent transparent rgba(255,255,255,0.14) transparent; }
 .glass .popover { -fx-background-color: linear-gradient(to bottom, rgba(44,36,88,0.95), rgba(22,16,48,0.96)); -fx-border-color: rgba(255,255,255,0.22); }
 .glass .hero-full { -fx-background-color: transparent; }
+
+/* ================= 6.0.1: Live TV, watched controls, metadata ================= */
+.topbar-title { -fx-font-size: 19px; -fx-font-weight: bold; -fx-padding: 0 6 0 0; }
+.topbar-field {
+    -fx-background-color: -cs-chip; -fx-background-radius: 999; -fx-border-color: -cs-line; -fx-border-radius: 999;
+    -fx-padding: 8 16 8 16; -fx-text-fill: -cs-text; -fx-prompt-text-fill: -cs-faint;
+}
+.topbar-field:focused { -fx-border-color: -cs-accent; }
+.live-badge { -fx-background-color: #e8194f; -fx-text-fill: white; -fx-font-size: 10px; -fx-font-weight: bold; -fx-padding: 3 7 3 7; -fx-background-radius: 5; }
+.channel-card { -fx-background-color: -cs-surface; -fx-border-color: -cs-line; -fx-border-radius: 12; -fx-background-radius: 12; -fx-cursor: hand; }
+.channel-card:hover { -fx-border-color: -cs-accent; }
+.channel-logo { -fx-background-radius: 14; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.45), 14, 0.1, 0, 4); }
+.channel-initials { -fx-text-fill: white; -fx-font-weight: bold; }
+.channel-name { -fx-font-weight: bold; -fx-font-size: 13.5px; }
+.channel-now { -fx-text-fill: -cs-muted; -fx-font-size: 11.5px; }
+.channel-star { -fx-background-color: rgba(0,0,0,0.5); -fx-background-radius: 999; -fx-cursor: hand; -fx-min-width: 30; -fx-min-height: 30; }
+.channel-star .icon { -fx-background-color: rgba(255,255,255,0.8); }
+.channel-star.on .icon { -fx-background-color: #ffd34d; }
+.is-favourite .icon { -fx-background-color: #ffd34d; }
+.card-action {
+    -fx-background-color: rgba(0,0,0,0.65); -fx-background-radius: 999; -fx-border-color: rgba(255,255,255,0.35); -fx-border-radius: 999;
+    -fx-min-width: 32; -fx-min-height: 32; -fx-max-width: 32; -fx-max-height: 32; -fx-cursor: hand;
+}
+.card-action .icon { -fx-background-color: white; }
+.card-action:hover { -fx-background-color: -cs-accent; -fx-border-color: -cs-accent; }
+.watched-badge { -fx-background-color: rgba(34,197,94,0.92); -fx-text-fill: #04140a; -fx-font-size: 10.5px; -fx-font-weight: bold; -fx-padding: 2 7 2 7; -fx-background-radius: 6; }
+.hub-card { -fx-background-color: -cs-surface; -fx-border-color: -cs-line; -fx-border-radius: 14; -fx-background-radius: 14; -fx-padding: 18; }
+.hub-logo { -fx-background-radius: 13; -fx-min-width: 52; -fx-min-height: 52; -fx-max-width: 52; -fx-max-height: 52; }
+.hub-logo .label { -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14px; }
+.status-ok { -fx-background-color: rgba(34,197,94,0.14); -fx-text-fill: #4ade80; -fx-border-color: rgba(34,197,94,0.35); -fx-border-radius: 999; -fx-background-radius: 999; -fx-padding: 3 9 3 9; -fx-font-size: 11px; -fx-font-weight: bold; }
+.status-warn { -fx-background-color: rgba(234,179,8,0.14); -fx-text-fill: #facc15; -fx-border-color: rgba(234,179,8,0.35); -fx-border-radius: 999; -fx-background-radius: 999; -fx-padding: 3 9 3 9; -fx-font-size: 11px; -fx-font-weight: bold; }
+.rating-pill { -fx-background-color: -cs-chip; -fx-border-color: -cs-line; -fx-border-radius: 10; -fx-background-radius: 10; -fx-padding: 6 12 6 12; -fx-font-weight: bold; -fx-font-size: 14px; }
+.rating-tmdb { -fx-text-fill: #01b4e4; -fx-font-weight: bold; }
+.rating-imdb { -fx-text-fill: #f5c518; -fx-font-weight: bold; }
+.rating-anilist { -fx-text-fill: #02a9ff; -fx-font-weight: bold; }
+.tmdb-badge { -fx-background-color: rgba(1,30,60,0.88); -fx-border-color: #01b4e4; -fx-border-radius: 6; -fx-background-radius: 6; -fx-padding: 1 6 1 6; -fx-font-size: 10.5px; -fx-font-weight: bold; -fx-text-fill: #90cea1; }
+.cast-photo { -fx-background-radius: 999; -fx-border-color: -cs-line; -fx-border-width: 2; -fx-border-radius: 999; }
+.cast-name { -fx-font-weight: bold; -fx-font-size: 12px; }
+.cast-role { -fx-text-fill: -cs-muted; -fx-font-size: 11px; }

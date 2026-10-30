@@ -4,6 +4,8 @@ import com.lagradost.cloudstream3.linux.AppDirs
 import com.lagradost.cloudstream3.linux.CompatChecker
 import com.lagradost.cloudstream3.linux.DnsProvider
 import com.lagradost.cloudstream3.linux.Engine
+import com.lagradost.cloudstream3.linux.LiveTv
+import com.lagradost.cloudstream3.linux.Metadata
 import com.lagradost.cloudstream3.linux.StremioApi
 import com.lagradost.cloudstream3.linux.Logs
 import com.lagradost.cloudstream3.linux.Network
@@ -45,6 +47,8 @@ class SettingsPage : StackPane(), Refreshable {
         Category("profiles", "Profiles", Icons.PEOPLE, ::profiles),
         Category("appearance", "Appearance", Icons.PALETTE, ::appearance),
         Category("playback", "Playback", Icons.PLAY_CIRCLE, ::playback),
+        Category("livetv", "Live TV sources", Icons.TV, ::liveTv),
+        Category("metadata", "Metadata & integrations", Icons.SPARK, ::metadata),
         Category("network", "Network & DNS", Icons.NETWORK, ::network),
         Category("extensions", "Extensions", Icons.EXTENSION, ::extensions),
         Category("developer", "Developer & logs", Icons.CODE, ::developer),
@@ -52,6 +56,10 @@ class SettingsPage : StackPane(), Refreshable {
         Category("shortcuts", "Keyboard shortcuts", Icons.KEYBOARD, ::shortcuts),
         Category("about", "About", Icons.INFO, ::about),
     )
+
+    /** Sub-pages opened from a category (not in the list on the left). */
+    private val subPages = listOf(Category("tmdb", "TMDB", Icons.SPARK, ::tmdbPage), Category("anilist", "AniList", Icons.SPARK, ::anilistPage))
+    private val parentOf = mapOf("tmdb" to "metadata", "anilist" to "metadata")
 
     /** Every setting's title and description, for search. */
     private val index = mutableListOf<Triple<String, String, String>>()
@@ -80,7 +88,7 @@ class SettingsPage : StackPane(), Refreshable {
         nav.children.setAll(categories.map { c ->
             label(c.title, "settings-nav-item").apply {
                 graphic = icon(c.icon, 18.0)
-                if (c.id == current) styleClass += "active"
+                if (c.id == current || c.id == parentOf[current]) styleClass += "active"
                 onClick { search.clear(); open(c.id) }
             }
         })
@@ -89,14 +97,18 @@ class SettingsPage : StackPane(), Refreshable {
     fun open(id: String) {
         current = id
         renderNav()
-        val c = categories.first { it.id == id }
-        body.children.setAll(listOf<Node>(label(c.title, "h2")) + c.build())
+        val c = (categories + subPages).first { it.id == id }
+        val parent = parentOf[id]?.let { p -> categories.first { it.id == p } }
+        val title: Node = if (parent == null) label(c.title, "h2") else hbox(12.0,
+            button("Back", Icons.BACK, "btn-ghost", "btn-small") { open(parent.id) },
+            vbox(0.0, label(parent.title, "faint", "small"), label(c.title, "h2")))
+        body.children.setAll(listOf(title) + c.build())
     }
 
     private fun buildIndex() {
         index.clear()
         indexing = true
-        categories.forEach { c -> indexCategory = c.id; c.build() }
+        (categories + subPages).forEach { c -> indexCategory = c.id; c.build() }
         indexing = false
     }
 
@@ -111,7 +123,7 @@ class SettingsPage : StackPane(), Refreshable {
                 hbox(14.0,
                     vbox(3.0, label(t, "bold"), label(d, "muted", "small").apply { isWrapText = true; maxWidth = 640.0 }),
                     spacer(),
-                    label(categories.first { it.id == cat }.title, "tag"),
+                    label((categories + subPages).first { it.id == cat }.title, "tag"),
                 ).apply {
                     styleClass.addAll("card-row", "hover-row")
                     pad(10.0, 12.0)
@@ -172,6 +184,10 @@ class SettingsPage : StackPane(), Refreshable {
         return listOf(
             section("Profiles", list, row("Manage profiles", "Add, edit or delete profiles; set avatars, PINs and kids profiles.",
                 button("Manage profiles", Icons.PEOPLE, "btn-ghost") { Nav.window.showOverlay(ProfilePicker(startup = false, manage = true)) })),
+            section("Kids",
+                row("Parent PIN", if (Profiles.hasParentPin) "Needed to leave a kids profile. Change it here (you'll need the current one)."
+                    else "Not set yet. It's created when you make a kids profile, or set one now.",
+                    button(if (Profiles.hasParentPin) "Change PIN" else "Set PIN", Icons.LOCK, "btn-ghost", "btn-small") { changeParentPin() })),
             section("Startup",
                 row("Ask who's watching", "With more than one profile, show the profile picker when the app starts. It always shows when the last profile has a PIN.",
                     Switch(Profiles.askOnStart) { Profiles.askOnStart = it })),
@@ -179,6 +195,21 @@ class SettingsPage : StackPane(), Refreshable {
                 "Each profile has its own history, continue watching, list, home layout, theme and player preferences (subtitles, audio, volume). " +
                     "Extensions, Stremio add-ons, network and storage settings are shared by everyone.", "muted").apply { isWrapText = true; pad(10.0, 0.0) }),
         )
+    }
+
+    /** Current PIN (if any) → new PIN → repeat, each in the PIN pad. */
+    private fun changeParentPin() {
+        fun askNew() = Nav.window.showOverlay(PinPrompt("New parent PIN") { first ->
+            javafx.application.Platform.runLater {
+                Nav.window.showOverlay(PinPrompt("Repeat the new PIN") { again ->
+                    (again == first).also { ok -> if (ok) { Profiles.setParentPin(first); Toasts.show("Parent PIN saved"); open("profiles") } }
+                })
+            }
+            true
+        })
+        if (Profiles.hasParentPin) Nav.window.showOverlay(PinPrompt("Current parent PIN") { p ->
+            Profiles.checkParentPin(p).also { if (it) javafx.application.Platform.runLater { askNew() } }
+        }) else askNew()
     }
 
     private fun appearance(): List<Node> {
@@ -563,6 +594,183 @@ class SettingsPage : StackPane(), Refreshable {
             headerText = null
             dialogPane.stylesheets += SettingsPage::class.java.getResource("/ui/theme.css")!!.toExternalForm()
         }.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL) == javafx.scene.control.ButtonType.OK
+
+    // ---------- Metadata & integrations ----------
+
+    private fun hubCard(logo: Node, color: String, title: String, text: String, tags: List<Node>, right: List<Node>): Node {
+        val tile = StackPane(logo).apply { styleClass += "hub-logo"; style = "-fx-background-color: $color;" }
+        roundedClip(tile, 13.0)
+        val info = vbox(5.0, label(title, "bold").apply { style = "-fx-font-size: 15px;" },
+            label(text, "muted").apply { isWrapText = true; maxWidth = 640.0 },
+            hbox(6.0, *tags.toTypedArray()).pad(4.0, 0.0, 0.0, 0.0)).apply { HBox.setHgrow(this, Priority.ALWAYS); minWidth = 0.0 }
+        val side = vbox(12.0, *right.toTypedArray()).apply { alignment = javafx.geometry.Pos.TOP_RIGHT; minWidth = javafx.scene.layout.Region.USE_PREF_SIZE }
+        if (indexing) index += Triple(indexCategory, title, text)
+        return hbox(16.0, tile, info, side).apply { styleClass += "hub-card"; alignment = javafx.geometry.Pos.TOP_LEFT }
+    }
+
+    private fun metadata(): List<Node> {
+        val tmdbStatus = when {
+            Metadata.tmdbKey.isBlank() -> label("Add your free API key", "status-warn")
+            else -> label("✓ Your API key", "status-ok")
+        }
+        return listOf(
+            label("Extensions often give only a title and a poster. These services fill in ratings, artwork and cast for every extension " +
+                "and Stremio add-on, matched by title, year and IMDb ID. Settings and keys stay on this computer.", "muted").apply { isWrapText = true; maxWidth = 860.0 },
+            hubCard(label("TMDB"), "linear-gradient(to bottom right, #0d253f, #01b4e4)", "The Movie Database (TMDB)",
+                "Ratings, wide backdrops, title logos, cast with photos, trailers and similar titles for films and series from every extension.",
+                listOf(tmdbStatus, label(Metadata.language, "tag")) + if (Metadata.posterRatings) listOf(label("Ratings on posters", "tag")) else emptyList(),
+                listOf(Switch(Metadata.tmdbEnabled) { Metadata.tmdbEnabled = it },
+                    button("Configure TMDB", Icons.CHEVRON_RIGHT, "btn-accent", "btn-small") { open("tmdb") }.apply { contentDisplay = javafx.scene.control.ContentDisplay.RIGHT; id = "configure-tmdb" })),
+            hubCard(label("AL"), "linear-gradient(to bottom right, #02a9ff, #2b2d42)", "AniList (anime)",
+                "Anime scores and banners for anime titles. No account or key needed.",
+                listOf(label("✓ Ready · no key needed", "status-ok")),
+                listOf(Switch(Metadata.anilist) { Metadata.anilist = it })),
+            hubCard(label("IMDb"), "linear-gradient(to bottom right, #7c3aed, #c026d3)", "Cinemeta (IMDb ratings)",
+                "Stremio's free catalog: IMDb ratings and IDs, also when TMDB has no match or no key is set. No key needed.",
+                listOf(label("✓ Ready", "status-ok")),
+                listOf(Switch(Metadata.cinemeta) { Metadata.cinemeta = it })),
+            hubCard(icon(Icons.SUBTITLES, 26.0).apply { style += "-fx-background-color: white;" }, "linear-gradient(to bottom right, #16a34a, #065f46)", "OpenSubtitles",
+                "Online subtitles in the player (Subtitles → Search online). No account needed.",
+                listOf(label("✓ Ready", "status-ok")), emptyList()),
+            hbox(10.0, label("TMDB", "tmdb-badge"), label("This product uses the TMDB API but is not endorsed or certified by TMDB.", "faint", "small")),
+        )
+    }
+
+    private fun tmdbPage(): List<Node> {
+        val key = javafx.scene.control.PasswordField().apply {
+            text = Metadata.tmdbKey
+            promptText = "TMDB API key (v3) or read access token"
+            HBox.setHgrow(this, Priority.ALWAYS)
+        }
+        val status = label(if (Metadata.tmdbKey.isBlank()) "" else "Saved", "muted")
+        val test = button("Test & save", Icons.CHECK, "btn-accent", "btn-small") {
+            status.text = "Checking…"; status.styleClass.setAll("label", "muted")
+            ui.launch {
+                val problem = Metadata.testKey(key.text)
+                if (problem == null) {
+                    Metadata.tmdbKey = key.text
+                    status.text = "✓ Key works and is saved"; status.styleClass.setAll("label", "status-ok")
+                } else {
+                    status.text = problem; status.styleClass.setAll("label", "error-text")
+                }
+            }
+        }
+        val help = hbox(6.0, label("Free: make an account on themoviedb.org → Settings → API → request a key (Developer, personal use), then paste the \"API Key\" or the \"API Read Access Token\".", "muted", "small").apply { isWrapText = true; maxWidth = 640.0 },
+            label("Open themoviedb.org", "link-button").onClick { openUrl("https://www.themoviedb.org/settings/api") })
+        val (count, bytes) = Metadata.cacheStats()
+        val languages = listOf("en-US" to "English (US)", "en-GB" to "English (UK)", "ar-SA" to "Arabic", "hi-IN" to "Hindi", "ur-PK" to "Urdu", "es-ES" to "Spanish",
+            "fr-FR" to "French", "de-DE" to "German", "it-IT" to "Italian", "pt-BR" to "Portuguese (Brazil)", "tr-TR" to "Turkish", "ja-JP" to "Japanese", "ko-KR" to "Korean")
+        return listOf(
+            section("TMDB", row("Use TMDB", "Turn TMDB on or off without removing your key.", Switch(Metadata.tmdbEnabled) { Metadata.tmdbEnabled = it })),
+            vbox(10.0, label("API KEY", "section-label"), VBox(10.0, hbox(10.0, icon(Icons.KEY, 18.0).apply { styleClass += "faint-icon" }, key, test), status, help).apply { styleClass += "card"; pad(16.0, 18.0) }),
+            section("What to use TMDB for",
+                row("Ratings on posters", "A small TMDB score on cards in Home, Search and View all. Looked up as posters appear, then cached.", Switch(Metadata.posterRatings) { Metadata.posterRatings = it }),
+                row("Banner and title page artwork", "Wide backdrops and title logos when the extension only has a poster.", Switch(Metadata.artwork) { Metadata.artwork = it }),
+                row("Cast with photos, trailers and similar titles", "Shown on the title page.", Switch(Metadata.extras) { Metadata.extras = it }),
+                row("Replace the extension's plot", "Use TMDB's description even when the extension has its own.", Switch(Metadata.replaceExtension) { Metadata.replaceExtension = it })),
+            section("Language & cache",
+                row("Language", "For plots, titles and logos.", combo(languages, languages.firstOrNull { it.first == Metadata.language } ?: languages[0], { it.second }) { Metadata.language = it.first }),
+                row("Cache", "$count lookups saved · ${bytes / 1024} KB. Kept for a week.", button("Clear cache", Icons.DELETE, "btn-ghost", "btn-small") { Metadata.clearCache(); open("tmdb") })),
+            hbox(10.0, label("TMDB", "tmdb-badge"), label("This product uses the TMDB API but is not endorsed or certified by TMDB.", "faint", "small")),
+        )
+    }
+
+    private fun anilistPage(): List<Node> = listOf(
+        section("AniList", row("Use AniList for anime", "Scores and banners for titles extensions mark as anime.", Switch(Metadata.anilist) { Metadata.anilist = it })),
+    )
+
+    // ---------- Live TV sources ----------
+
+    private fun liveTv(): List<Node> {
+        val kinds = listOf(LiveTv.Kind.STREMIO to "Stremio / Nuvio add-on", LiveTv.Kind.M3U to "M3U playlist", LiveTv.Kind.XTREAM to "Xtream Codes login")
+        var kind = LiveTv.Kind.M3U
+        val url = TextField().apply { HBox.setHgrow(this, Priority.ALWAYS) }
+        val epg = TextField().apply { promptText = "TV guide (XMLTV) address, optional, e.g. https://…/guide.xml.gz"; HBox.setHgrow(this, Priority.ALWAYS) }
+        val user = TextField().apply { promptText = "Username"; HBox.setHgrow(this, Priority.ALWAYS) }
+        val pass = javafx.scene.control.PasswordField().apply { promptText = "Password"; HBox.setHgrow(this, Priority.ALWAYS) }
+        val name = TextField().apply { promptText = "Name (optional)"; prefWidth = 200.0 }
+        val status = label("", "muted").apply { isWrapText = true }
+        val extra = VBox(10.0)
+        val row = hbox(10.0)
+        lateinit var add: javafx.scene.control.Button
+        fun runAdd(work: suspend () -> String) {
+            status.text = "Checking…"; status.styleClass.setAll("label", "muted")
+            ui.launch {
+                try {
+                    val message = withContext(Dispatchers.IO) { work() }
+                    status.text = message
+                    url.clear(); epg.clear(); user.clear(); pass.clear(); name.clear()
+                    Toasts.show(message, seconds = 6.0)
+                    open("livetv")
+                } catch (t: Throwable) {
+                    status.text = "Couldn't add it: ${t.message ?: t}"
+                    status.styleClass.setAll("label", "error-text")
+                }
+            }
+        }
+        val chooseFile = button("Choose file…", Icons.FILE, "btn-ghost") {
+            FileChooser().apply {
+                title = "Choose an M3U playlist"
+                extensionFilters += FileChooser.ExtensionFilter("Playlists", "*.m3u", "*.m3u8", "*.txt")
+            }.showOpenDialog(scene.window)?.let { url.text = it.toURI().toString() }
+        }.tooltip("A playlist file on this computer")
+        fun layoutFields() {
+            url.promptText = when (kind) {
+                LiveTv.Kind.STREMIO -> "Add-on address: https://…/manifest.json or stremio://…"
+                LiveTv.Kind.M3U -> "Playlist address (…/playlist.m3u), or choose a file"
+                LiveTv.Kind.XTREAM -> "Server address, e.g. http://provider.example:8080"
+            }
+            row.children.setAll(when (kind) {
+                LiveTv.Kind.M3U -> listOf(url, chooseFile, add)
+                else -> listOf(url, add)
+            })
+            extra.children.setAll(when (kind) {
+                LiveTv.Kind.STREMIO -> emptyList()
+                LiveTv.Kind.M3U -> listOf(hbox(10.0, epg, name))
+                LiveTv.Kind.XTREAM -> listOf(hbox(10.0, user, pass, name))
+            })
+        }
+        add = button("Add source", Icons.ADD, "btn-accent") {
+            val k = kind
+            runAdd {
+                val (source, count) = LiveTv.add(k, url.text, name.text, epg.text, user.text, pass.text)
+                "Added ${source.name}: $count channels. They're in Live TV."
+            }
+        }
+        val tabs = ChipGroup { i -> kind = kinds[i].first; layoutFields() }.apply { setItems(kinds.map { it.second }, 1) }
+        layoutFields()
+        val form = VBox(12.0, tabs, row, extra, status).apply { styleClass += "card"; pad(16.0, 18.0) }
+        val sources = LiveTv.sources()
+        val list = VBox().apply {
+            styleClass += "card"; pad(4.0, 18.0)
+            if (sources.isEmpty()) children += label("No sources yet.", "muted").apply { pad(12.0, 0.0) }
+            sources.forEach { s ->
+                val badge = label(s.name.filter { it.isLetterOrDigit() }.take(2).uppercase(), "provider-badge")
+                val info = vbox(3.0, hbox(8.0, label(s.name, "bold"), label(s.kind.label.uppercase(), "tag")),
+                    label(when (s.kind) {
+                        LiveTv.Kind.M3U -> (if (s.url.startsWith("file:")) "File: " + java.io.File(java.net.URI(s.url)).name else s.url) + (s.epgUrl?.let { " · guide: $it" } ?: "")
+                        LiveTv.Kind.XTREAM -> "${s.url} · ${s.user}"
+                        LiveTv.Kind.STREMIO -> "Stremio add-on · also listed under Extensions → Stremio add-ons"
+                    }, "muted", "small").apply { maxWidth = 620.0 }).apply { HBox.setHgrow(this, Priority.ALWAYS); minWidth = 0.0 }
+                val refresh = button(null, Icons.REFRESH, "btn-ghost", "btn-small") {
+                    ui.launch { val n = LiveTv.channels(s.id, force = true).size; LiveTv.loadGuides(force = true); Toasts.show("${s.name}: $n channels") }
+                }.tooltip("Download the channel list and guide again")
+                val remove = button(null, Icons.DELETE, "btn-ghost", "btn-small") { LiveTv.remove(s.id); open("livetv") }.tooltip("Remove")
+                children += hbox(14.0, badge, info, refresh, remove, Switch(s.enabled) { LiveTv.setEnabled(s.id, it) }).apply { styleClass += "card-row" }
+            }
+        }
+        return listOf(
+            label("Sources added here appear only in Live TV, never on Home or in Search. Works with Stremio and Nuvio TV add-ons, " +
+                "M3U playlists with optional XMLTV TV guides (by address or as a file), and Xtream Codes logins from IPTV providers.", "muted").apply { isWrapText = true; maxWidth = 860.0 },
+            vbox(10.0, label("ADD A SOURCE", "section-label"), form),
+            vbox(10.0, label("YOUR LIVE TV SOURCES", "section-label"), list),
+            section("Options",
+                row("Refresh playlists every day", "Download channel lists again when they're more than a day old. Guides refresh every 12 hours.",
+                    Switch(LiveTv.refreshDaily) { LiveTv.refreshDaily = it }),
+                row("Allow Live TV in kids profiles", "Kids then see only channels in children's groups (Kids, Cartoons, Animation, Family…).",
+                    Switch(LiveTv.allowKids) { LiveTv.allowKids = it })),
+        )
+    }
 
     private fun about(): List<Node> = listOf(
         section("CloudStream for Linux",

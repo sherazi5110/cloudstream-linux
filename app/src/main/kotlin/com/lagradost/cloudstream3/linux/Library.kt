@@ -76,6 +76,46 @@ object Library {
 
     fun clearHistory() = write("history", emptyList<WatchEntry>())
 
+    /**
+     * Marks episodes (or a film) as watched: each gets a finished progress, and the title's
+     * history entry points at the last one, so it leaves Continue Watching and shows as watched.
+     */
+    @Synchronized
+    fun markWatched(apiName: String, url: String, name: String, posterUrl: String?, episodes: List<Pair<String, String?>>) {
+        if (episodes.isEmpty()) return
+        val progress = read<Map<String, Progress>>("progress", emptyMap()).toMutableMap()
+        episodes.forEach { (data, _) ->
+            val d = progress["$apiName|$data"]?.duration?.takeIf { it > 0 } ?: 1.0
+            progress["$apiName|$data"] = Progress(d, d)
+        }
+        val (lastData, lastLabel) = episodes.last()
+        val d = progress["$apiName|$lastData"]!!.duration
+        val entry = WatchEntry(apiName, url, name, posterUrl, lastData, lastLabel, d, d, System.currentTimeMillis())
+        prefs.edit()
+            .putString("progress", mapper.writeValueAsString(progress))
+            .putString("history", mapper.writeValueAsString((listOf(entry) + history().filterNot { it.apiName == apiName && it.url == url }).take(500)))
+            .apply()
+        listeners.forEach { it() }
+    }
+
+    /** The opposite of [markWatched]: forgets the progress of those episodes and the history entry. */
+    @Synchronized
+    fun markUnwatched(apiName: String, url: String, episodes: List<String>) {
+        val progress = read<Map<String, Progress>>("progress", emptyMap()).toMutableMap()
+        episodes.forEach { progress.remove("$apiName|$it") }
+        prefs.edit()
+            .putString("progress", mapper.writeValueAsString(progress))
+            .putString("history", mapper.writeValueAsString(history().filterNot { it.apiName == apiName && it.url == url }))
+            .apply()
+        listeners.forEach { it() }
+    }
+
+    /** Marks the episode a Continue Watching entry is on as watched. */
+    fun markWatched(e: WatchEntry) = markWatched(e.apiName, e.url, e.name, e.posterUrl, listOf(e.episodeData to e.episodeLabel))
+
+    fun isWatched(apiName: String, episodeData: String) =
+        progress(apiName, episodeData)?.let { it.duration > 0 && it.position / it.duration > 0.92 } == true
+
     fun bookmarks(): List<Bookmark> = read<List<Bookmark>>("bookmarks", emptyList()).sortedByDescending { it.addedAt }
 
     fun isBookmarked(apiName: String, url: String) = bookmarks().any { it.apiName == apiName && it.url == url }

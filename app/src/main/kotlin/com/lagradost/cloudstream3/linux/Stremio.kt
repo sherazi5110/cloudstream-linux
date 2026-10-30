@@ -164,7 +164,10 @@ object StremioAddons {
     fun setEnabled(url: String, enabled: Boolean) = save(stored().map { (a, j) -> if (a.url == url) a.copy(enabled = enabled) to j else a to j })
 
     /** One [MainAPI] per enabled add-on that has catalogs or metadata. */
-    fun apis(): List<MainAPI> = all().filter { it.enabled && (it.manifest.catalogs.isNotEmpty() || it.manifest.resources.any { r -> r.name == "meta" }) }
+    fun apis(): List<MainAPI> = all().filter { a ->
+        // TV channel catalogs belong to Live TV ([LiveTv]); only films, series etc. become a Home/Search source.
+        a.enabled && (a.manifest.catalogs.any { !LiveTv.isTvType(it.type) } || (a.manifest.resources.any { r -> r.name == "meta" } && a.manifest.types.any { !LiveTv.isTvType(it) }))
+    }
         .map { a -> synchronized(apis) { apis.getOrPut(a.url) { StremioApi(a) } } }
 
     fun enabled(): List<Addon> = all().filter { it.enabled }
@@ -191,9 +194,11 @@ class StremioApi(private val addon: StremioAddons.Addon) : MainAPI() {
     override var name = manifest.name
     override var mainUrl = addon.base
     override var lang = "en"
-    override val hasMainPage = manifest.catalogs.any { !it.needsExtra }
-    override val supportedTypes = manifest.types.map(StremioAddons::tvType).toSet()
-    override val mainPage = manifest.catalogs.filter { !it.needsExtra }.map {
+    /** Film/series catalogs only: TV channel catalogs are shown in Live TV. */
+    private val catalogs = manifest.catalogs.filter { !LiveTv.isTvType(it.type) }
+    override val hasMainPage = catalogs.any { !it.needsExtra }
+    override val supportedTypes = manifest.types.filter { !LiveTv.isTvType(it) }.map(StremioAddons::tvType).toSet()
+    override val mainPage = catalogs.filter { !it.needsExtra }.map {
         MainPageData("${it.name} · ${typeLabel(it.type)}", "${it.type}/${it.id}")
     }
 
@@ -227,7 +232,7 @@ class StremioApi(private val addon: StremioAddons.Addon) : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> = coroutineScope {
-        manifest.catalogs.filter { it.searchable }.map { c ->
+        catalogs.filter { it.searchable }.map { c ->
             async {
                 metas(StremioAddons.json("${addon.base}/catalog/${c.type}/${StremioAddons.encode(c.id)}/search=${StremioAddons.encode(query)}.json"), c.type)
             }

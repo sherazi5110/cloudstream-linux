@@ -27,7 +27,7 @@ object Settings {
     private val PROFILE_KEYS = setOf(
         "auto_play_next", "subtitle_language", "preferred_quality", "player_volume", "hero_slider", "anti_spoiler",
         "player_equalizer", "audio_language", "subtitle_size", "subtitle_color", "subtitle_outline", "subtitle_background",
-        "player_zoom", "last_home_provider", "home_section",
+        "player_zoom", "last_home_provider",
         "theme_mode", "theme_accent", "theme_wallpaper", "theme_wallpaper_dim", "theme_wallpaper_blur",
     )
 
@@ -140,9 +140,4 @@ object Settings {
     var lastHomeProvider: String?
         get() = string("last_home_provider", "").ifBlank { null }
         set(v) = put("last_home_provider", v ?: "")
-
-    /** The Home section last picked in the top bar (a [com.lagradost.cloudstream3.linux.ui.Section] name). */
-    var homeSection: String
-        get() = string("home_section", "HOME")
-        set(v) = put("home_section", v)
 }

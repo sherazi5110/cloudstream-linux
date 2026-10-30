@@ -85,6 +85,33 @@ object Profiles {
         get() = prefs.getString("ask_on_start", null) != "false"
         set(v) { prefs.edit().putString("ask_on_start", v.toString()).apply() }
 
+    /**
+     * The parent PIN guards leaving a kids profile. It's created when the first kids profile
+     * is made, and stored as a salted hash.
+     */
+    val hasParentPin get() = !prefs.getString("parent_pin", null).isNullOrBlank()
+
+    fun setParentPin(pin: String?) {
+        prefs.edit().putString("parent_pin", pin?.let(::hash) ?: "").apply()
+    }
+
+    fun checkParentPin(pin: String) = hasParentPin && prefs.getString("parent_pin", null) == hash(pin)
+
+    private fun hash(pin: String) = java.security.MessageDigest.getInstance("SHA-256")
+        .digest("cloudstream-linux:$pin".toByteArray()).joinToString("") { "%02x".format(it) }
+
+    /** Whether going from the current profile to [target] needs a PIN, and which PINs open it. */
+    fun unlockFor(target: Profile): ((String) -> Boolean)? {
+        val leavingKids = current.kids && !target.kids
+        val own = target.pin
+        return when {
+            !leavingKids && own == null -> null
+            !leavingKids -> { p -> p == own || checkParentPin(p) }
+            own == null && !hasParentPin -> null // set up before parent PINs existed: nothing to ask
+            else -> { p -> (own != null && p == own) || checkParentPin(p) }
+        }
+    }
+
     fun switchTo(id: String) {
         if (all().none { it.id == id }) return
         currentId = id
