@@ -1,10 +1,16 @@
-# CloudStream for Linux
+# CloudStream for Linux and Android
 
-Run **CloudStream extensions and Stremio add-ons on Ubuntu/Linux**, from the same repositories the Android app uses, with no changes to the extensions.
+Run **CloudStream extensions and Stremio add-ons on Linux, Android phones and Android TV**, from the same repositories the
+official Android app uses, with no changes to the extensions.
 
-> **Android app — coming soon.** A new app for **phones (touch)** and **Android TV (remote)**, with this app's look,
-> profiles, Live TV, Stremio add-ons, TMDB and VLC player, is being built in this repository.
-> [Preview below](#android-app-coming-soon).
+**[Download](https://github.com/sherazi5110/cloudstream-linux/releases/latest)** · **[How to install (.deb, Flatpak, .apk)](INSTALL.md)**
+
+| Linux | Android |
+|---|---|
+| `.deb` for Ubuntu, Debian, Mint, ChromeOS · `.flatpak` for any distro · `.tar` with your own Java | `.apk` for phones, tablets, Android TV and Fire TV (in testing) |
+
+> **Android app (in testing):** a new app for **phones (touch)** and **Android TV (remote)** with this app's look,
+> profiles, Live TV, Stremio add-ons, TMDB and the VLC player. [More below](#android-app-in-testing).
 
 - **New look (6.0):** a slim icon rail, a clean top bar (source picker, search, your profile) and a full-width featured banner with backdrop, rating, "#1 in …", plot, *Play* and *More Info*. A new logo (a big C with an s inside, over a cloud) whose letters follow your theme colour.
 - **Live TV (6.0.1):** a Live TV page of its own (below Home in the rail) for IPTV: **M3U playlists with XMLTV guides**, **Xtream Codes** logins, and **Stremio / Nuvio TV add-ons** (add-ons with TV channel catalogs move here automatically) and playlist files. Channel logos come from the playlist, or from the open iptv-org database when missing. What's on now and next, categories from the playlist's groups, favourites, recently watched, channel search and a country filter. Live TV sources never appear on Home.
@@ -53,10 +59,13 @@ Run **CloudStream extensions and Stremio add-ons on Ubuntu/Linux**, from the sam
 
 See **[docs/ANALYSIS.md](docs/ANALYSIS.md)** for how the Android app works, and **[docs/PLAYER-AND-CATALOGS.md](docs/PLAYER-AND-CATALOGS.md)** for how the built-in player, online subtitles and catalogs work (VLC source, the other Linux app, and this code), all with file and line references.
 
-## Android app (coming soon)
+## Android app (in testing)
 
-**Not released yet: these are the approved design previews**, not screenshots of a finished app. The Android app is a
-new app (not a fork of the official one) with the same look, features and simplicity as the Linux app.
+The Android app is a new app (not a fork of the official one) with the same look, features and simplicity as the Linux
+app. It's in testing: releases from V7 include `.apk` files, and test builds can be downloaded from the latest
+[Build workflow run](https://github.com/sherazi5110/cloudstream-linux/actions/workflows/build.yml) (artifact
+`cloudstream-android`). The pictures below are the approved design previews; on landscape tablets and TV the app uses
+the Linux app's icon rail, top bar, banner and title page.
 
 | | |
 |---|---|
@@ -76,8 +85,9 @@ new app (not a fork of the official one) with the same look, features and simpli
 (M3U/XMLTV, Xtream, Stremio TV add-ons), TMDB/IMDb/AniList metadata, profiles, kids profiles with a parent PIN and the
 adult-content setting come over from the Linux app.
 
-**Install (planned):** each release will include an `.apk` next to the Linux files. See
-[INSTALL.md → Android](INSTALL.md#android-coming-soon). Plan and status: [docs/ANDROID-PLAN.md](docs/ANDROID-PLAN.md).
+**Install:** see [INSTALL.md → Android](INSTALL.md#android-phones-tablets-and-android-tv) (which `.apk` to pick, phones,
+Android TV / Fire TV with Downloader, adb). Building it yourself: [android/README.md](android/README.md). Plan and status:
+[docs/ANDROID-PLAN.md](docs/ANDROID-PLAN.md).
 
 ## How it works
 
@@ -101,7 +111,7 @@ repo.json → plugins.json → Extension.cs3 ──dex2jar──► JVM classes 
 
 ## Install
 
-**Ready-made packages** (.deb for Ubuntu/Debian, Flatpak for any distro, and other Linux): see **[INSTALL.md](INSTALL.md)**.
+**Ready-made packages** (.deb for Ubuntu/Debian, Flatpak for any distro, other Linux, and the Android `.apk`): see **[INSTALL.md](INSTALL.md)**.
 
 ### Build from source (Ubuntu 22.04+)
 
