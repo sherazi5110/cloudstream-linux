@@ -69,7 +69,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -339,12 +341,23 @@ private fun Controls(c: PlayerController, onSheet: (Sheet) -> Unit, onLock: () -
             if (!c.isLive) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(clock(c.time / 1000.0), style = MaterialTheme.typography.titleSmall)
                 var dragging by remember { mutableStateOf<Float?>(null) }
+                val focusManager = LocalFocusManager.current
                 Slider(
                     value = dragging ?: if (c.length > 0) c.time.toFloat() / c.length else 0f,
                     onValueChange = { dragging = it; poke() },
                     onValueChangeFinished = { dragging?.let { c.seekTo((it * c.length).toLong()) }; dragging = null },
                     colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Palette.accent, inactiveTrackColor = Color.White.copy(alpha = 0.3f)),
-                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                    // Remote: ←/→ seek 10 s, ↑/↓ leave the bar (the slider would otherwise move with them).
+                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp).onPreviewKeyEvent { e ->
+                        val down = e.type == KeyEventType.KeyDown
+                        when (e.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_LEFT -> { if (down) { c.seekBy(-10_000); poke() }; true }
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> { if (down) { c.seekBy(10_000); poke() }; true }
+                            KeyEvent.KEYCODE_DPAD_UP -> { if (down) focusManager.moveFocus(FocusDirection.Up); true }
+                            KeyEvent.KEYCODE_DPAD_DOWN -> { if (down) focusManager.moveFocus(FocusDirection.Down); true }
+                            else -> false
+                        }
+                    },
                 )
                 Text(clock(c.length / 1000.0), style = MaterialTheme.typography.titleSmall)
             }
@@ -392,7 +405,9 @@ private fun LoadingOverlay(c: PlayerController, onChoose: () -> Unit) {
             if (c.searching || c.current != null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 10.dp), color = Palette.accent, trackColor = Color.White.copy(alpha = 0.15f))
             else Spacer(Modifier.height(24.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 12.dp)) {
-                if (c.links.isNotEmpty()) PillButton("Play now", Icons.Filled.PlayArrow) { c.ranked().firstOrNull()?.let { c.play(it) } }
+                // While a source is starting, "Play now" would only restart it: offer the next one instead.
+                if (c.current != null) PillButton("Next source", Icons.Filled.SkipNext) { c.nextSource() }
+                else if (c.links.isNotEmpty()) PillButton("Play now", Icons.Filled.PlayArrow) { c.ranked().firstOrNull()?.let { c.play(it) } }
                 if (c.links.isNotEmpty()) PillButton("Choose source", Icons.AutoMirrored.Filled.List, primary = false) { onChoose() }
                 PillButton("Cancel", null, primary = false) { Nav.back() }
             }

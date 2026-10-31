@@ -27,6 +27,9 @@ class HomeState {
     val sections = mutableStateListOf<Engine.HomeSection>()
     var loading by mutableStateOf(false)
     var continueWatching by mutableStateOf<List<WatchEntry>>(emptyList())
+    /** Bumped when the user edits catalogs, so Home reloads. */
+    var catalogVersion by mutableStateOf(0)
+    var editing by mutableStateOf(false)
 
     /** Banner titles: the first few of the first row. */
     val featured: List<SearchResponse> get() = sections.firstOrNull()?.list?.list.orEmpty().take(6)
@@ -48,7 +51,11 @@ fun rememberHomeState(): HomeState {
         state.api = list.firstOrNull { it.name == keep } ?: list.firstOrNull()
     }
     // Reload when the chosen extension changes (not on every extension that finishes loading).
-    LaunchedEffect(state.api) {
+    DisposableEffect(Unit) {
+        val off = io.github.sherazi5110.cloudstream.Catalogs.onChange { state.catalogVersion++ }
+        onDispose { off() }
+    }
+    LaunchedEffect(state.api, state.catalogVersion) {
         state.sections.clear()
         val api = state.api ?: return@LaunchedEffect
         state.loading = true

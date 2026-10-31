@@ -15,10 +15,12 @@ object Catalogs {
     data class Entry(val index: Int, val section: MainPageData, val enabled: Boolean)
 
     private val prefs: SharedPreferences get() = App.context.getSharedPreferences("home_catalogs", 0)
-    private val listeners = mutableListOf<() -> Unit>()
+    private val listeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
 
-    fun onChange(listener: () -> Unit) {
+    /** Returns a function that unregisters the listener. */
+    fun onChange(listener: () -> Unit): () -> Unit {
         listeners += listener
+        return { listeners -= listener }
     }
 
     private fun changed() = listeners.toList().forEach { it() }

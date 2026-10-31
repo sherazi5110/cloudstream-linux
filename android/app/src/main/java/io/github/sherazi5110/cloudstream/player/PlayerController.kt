@@ -100,6 +100,7 @@ class PlayerController(
     private val tried = mutableSetOf<String>()
     private var startAt: Long = 0
     private var grace: Job? = null
+    private var watchdog: Job? = null
     private var saver: Job? = null
     val isLive = response is LiveStreamLoadResponse
 
@@ -113,7 +114,7 @@ class PlayerController(
         }
         player.setEventListener { e ->
             when (e.type) {
-                MediaPlayer.Event.Playing -> { playing = true; buffering = false; started = true; error = null }
+                MediaPlayer.Event.Playing -> { playing = true; buffering = false; started = true; error = null; watchdog?.cancel() }
                 MediaPlayer.Event.Paused -> playing = false
                 MediaPlayer.Event.Buffering -> buffering = e.buffering < 100f
                 MediaPlayer.Event.TimeChanged -> { time = e.timeChanged; if (buffering && playing) buffering = false }
@@ -191,10 +192,19 @@ class PlayerController(
         player.media = media
         media.release()
         player.play()
+        // A source that hasn't started after 25 s (dead host, endless redirect) gives way to the next one.
+        watchdog?.cancel()
+        if (!started) watchdog = scope.launch {
+            delay(25_000)
+            if (!started && current?.url == link.url) failover()
+        }
         player.rate = speed
         player.videoScale = zoom.scale
         selectedSubtitle?.let { url -> subtitles.firstOrNull { it.url == url }?.let { addSubtitle(it) } }
     }
+
+    /** Skips to the next source not tried yet ("Next source" on the loading screen). */
+    fun nextSource() = failover()
 
     /** A source failed: try the next untried one, like the Linux player. */
     private fun failover() {
