@@ -312,7 +312,7 @@ private fun WideHome(state: HomeState) {
 
 @Composable
 private fun WideBanner(state: HomeState, focused: SearchResponse?, height: androidx.compose.ui.unit.Dp) {
-    val featured = state.featured
+    val featured = if (io.github.sherazi5110.cloudstream.Settings.heroSlider) state.featured else state.featured.take(1)
     val pager = rememberPagerState { featured.size.coerceAtLeast(1) }
     // Slides every 9 seconds (unless a card on TV holds the banner).
     LaunchedEffect(featured.size, focused) {
@@ -342,11 +342,13 @@ private fun WideBanner(state: HomeState, focused: SearchResponse?, height: andro
 @Composable
 private fun BannerPage(item: SearchResponse, rank: Int?, rowName: String?) {
     val details = rememberDetails(item.apiName, item.url)
+    val info = rememberMetadata(details)
+    val art = io.github.sherazi5110.cloudstream.Metadata.artwork
     val scope = rememberCoroutineScope()
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (isTv && rank == 0) runCatching { playFocus.requestFocus() } }
     Box(Modifier.fillMaxSize()) {
-        NetImage(details?.backgroundPosterUrl ?: details?.posterUrl ?: item.posterUrl, Modifier.fillMaxSize(),
+        NetImage(info?.backdrop?.takeIf { art } ?: details?.backgroundPosterUrl ?: details?.posterUrl ?: item.posterUrl, Modifier.fillMaxSize(),
             details?.posterHeaders ?: item.posterHeaders)
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
             0f to Palette.background.copy(alpha = 0.95f), 0.45f to Palette.background.copy(alpha = 0.55f), 0.75f to Color.Transparent)))
@@ -357,7 +359,7 @@ private fun BannerPage(item: SearchResponse, rank: Int?, rowName: String?) {
                 Logo(18.dp)
                 Text(item.apiName.uppercase(), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 8.dp))
             }
-            val logo = details?.logoUrl
+            val logo = details?.logoUrl ?: info?.logo?.takeIf { art }
             if (logo != null) NetImage(logo, Modifier.padding(vertical = 12.dp).height(96.dp).widthIn(max = 460.dp).fillMaxWidth(),
                 contentScale = ContentScale.Fit, alignment = Alignment.CenterStart, placeholder = false)
             else Text(item.name, style = MaterialTheme.typography.displayLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -367,7 +369,7 @@ private fun BannerPage(item: SearchResponse, rank: Int?, rowName: String?) {
                 Icon(Icons.Filled.Tv, null, tint = Color.White, modifier = Modifier.size(20.dp))
                 Text("#${rank + 1} in $rowName", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
             }
-            details?.plot?.takeIf { it.isNotBlank() }?.let {
+            (details?.plot?.takeIf { it.isNotBlank() } ?: info?.overview)?.let {
                 Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
             }
             Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

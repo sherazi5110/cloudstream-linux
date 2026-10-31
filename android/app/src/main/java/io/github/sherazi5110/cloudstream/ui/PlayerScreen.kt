@@ -66,6 +66,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -103,7 +105,7 @@ import java.text.DateFormat
 import java.util.Date
 import kotlin.math.abs
 
-private enum class Sheet(val title: String) { SOURCES("Sources"), SUBTITLES("Subtitles"), AUDIO("Audio"), SPEED("Speed"), ZOOM("Zoom") }
+private enum class Sheet(val title: String) { SOURCES("Sources"), SUBTITLES("Subtitles"), ONLINE("Online subtitles"), AUDIO("Audio"), SPEED("Speed"), ZOOM("Zoom") }
 
 fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
@@ -113,7 +115,13 @@ fun Context.findActivity(): Activity? = when (this) {
 
 @Composable
 fun PlayerScreen(screen: Screen.Player) {
-    val c = remember(screen) { PlayerController(screen.api, screen.response, screen.playable, screen.chooseSource) }
+    val c = remember(screen) { PlayerController(screen.api, screen.response, screen.playable, screen.chooseSource, live = screen.channel != null) }
+    val scope = rememberCoroutineScope()
+    // CH+ / CH− (and page up/down) move through the Live TV list.
+    val zap: (Int) -> Boolean = { step ->
+        val list = screen.channels; val ch = screen.channel
+        if (list != null && ch != null) { LivePlayback.neighbour(list, ch, step)?.let { LivePlayback.play(scope, it, list, replace = true) }; true } else false
+    }
     val context = LocalContext.current
     val activity = remember { context.findActivity() }
     val view = LocalView.current
@@ -190,6 +198,8 @@ fun PlayerScreen(screen: Screen.Player) {
                     KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { c.seekBy(30_000); true }
                     KeyEvent.KEYCODE_MEDIA_REWIND -> { c.seekBy(-30_000); true }
                     KeyEvent.KEYCODE_MEDIA_NEXT -> { c.next?.let { Nav.replace(Screen.Player(c.api, c.response, it)) }; true }
+                    KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> zap(-1)
+                    KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> zap(1)
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (!controls && c.started && sheet == null) { c.togglePause(); controls = true; true } else false
                     KeyEvent.KEYCODE_DPAD_LEFT -> if (!controls && c.started && sheet == null) { c.seekBy(-10_000); true } else false
                     KeyEvent.KEYCODE_DPAD_RIGHT -> if (!controls && c.started && sheet == null) { c.seekBy(10_000); true } else false
@@ -226,7 +236,7 @@ fun PlayerScreen(screen: Screen.Player) {
             }
         }
 
-        sheet?.let { s -> SheetPanel(s, c, Modifier.align(Alignment.CenterEnd)) { sheet = null } }
+        sheet?.let { s -> SheetPanel(s, c, Modifier.align(Alignment.CenterEnd), onOpen = { sheet = it }) { sheet = null } }
     }
 }
 
@@ -422,7 +432,19 @@ private fun ExtractorLink.qualityText(): String = when {
 }
 
 @Composable
-private fun SheetPanel(sheet: Sheet, c: PlayerController, modifier: Modifier, onClose: () -> Unit) {
+private fun SheetPanel(sheet: Sheet, c: PlayerController, modifier: Modifier, onOpen: (Sheet) -> Unit, onClose: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    // Online subtitles: searched when the panel opens.
+    var online by remember(sheet) { mutableStateOf<List<io.github.sherazi5110.cloudstream.OnlineSubtitles.Result>?>(null) }
+    var onlineError by remember(sheet) { mutableStateOf<String?>(null) }
+    if (sheet == Sheet.ONLINE) LaunchedEffect(Unit) {
+        runCatching {
+            io.github.sherazi5110.cloudstream.OnlineSubtitles.search(io.github.sherazi5110.cloudstream.OnlineSubtitles.query(c.response, c.playable.season, c.playable.episode))
+        }.onSuccess { list ->
+            val wanted = io.github.sherazi5110.cloudstream.Settings.subtitleLanguage.split(',').map { it.trim() }.filter { it.isNotBlank() }
+            online = list.sortedBy { r -> if (wanted.any { io.github.sherazi5110.cloudstream.OnlineSubtitles.matches(r.language, it) }) 0 else 1 }
+        }.onFailure { onlineError = it.message ?: it.toString(); online = emptyList() }
+    }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).pointerInput(Unit) { detectTapGestures { onClose() } })
     val first = remember { FocusRequester() }
     LaunchedEffect(sheet) { runCatching { first.requestFocus() } }
@@ -440,13 +462,28 @@ private fun SheetPanel(sheet: Sheet, c: PlayerController, modifier: Modifier, on
                 add(Option("Off", null, currentSpu == -1 && c.selectedSubtitle == null) { c.setSpu(-1); onClose() })
                 spu.filter { it.id != -1 }.forEach { t -> add(Option(t.name, "In the video", t.id == currentSpu && c.selectedSubtitle == null) { c.setSpu(t.id); onClose() }) }
                 c.subtitles.forEach { s -> add(Option(s.lang, "From ${c.api.name}", s.url == c.selectedSubtitle) { c.addSubtitle(s); onClose() }) }
+                if (!c.isLive) add(Option("Search online…", "OpenSubtitles, no account", false) { onOpen(Sheet.ONLINE) })
+            }
+            Sheet.ONLINE -> online.orEmpty().map { r ->
+                Option(r.languageName, r.id, false) {
+                    scope.launch {
+                        runCatching { io.github.sherazi5110.cloudstream.OnlineSubtitles.download(r) }
+                            .onSuccess { c.addSubtitleFile(it) }
+                            .onFailure { io.github.sherazi5110.cloudstream.App.toast("Couldn't download: ${it.message}") }
+                    }
+                    onClose()
+                }
             }
             Sheet.AUDIO -> c.audioTracks().filter { it.id != -1 }.map { t -> Option(t.name, null, t.id == c.audioTrack()) { c.setAudio(t.id); onClose() } }
             Sheet.SPEED -> listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f).map { r -> Option("$r×", if (r == 1f) "Normal" else null, r == c.speed) { c.setRate(r); onClose() } }
             Sheet.ZOOM -> Zoom.entries.map { z -> Option(z.label, null, z == c.zoom) { c.setZoomMode(z); onClose() } }
         }
         if (options.isEmpty()) Text(
-            when (sheet) { Sheet.SOURCES -> if (c.searching) "Looking for sources…" else "No sources found"; else -> "Nothing to choose here" },
+            when (sheet) {
+                Sheet.SOURCES -> if (c.searching) "Looking for sources…" else "No sources found"
+                Sheet.ONLINE -> if (online == null) "Searching OpenSubtitles…" else onlineError ?: "No subtitles found"
+                else -> "Nothing to choose here"
+            },
             style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(20.dp))
         LazyColumn(contentPadding = PaddingValues(horizontal = 8.dp)) {
             items(options.size) { i ->

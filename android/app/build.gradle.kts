@@ -13,8 +13,8 @@ android {
         applicationId = "io.github.sherazi5110.cloudstream"
         minSdk = 23
         targetSdk = 36
-        versionCode = 1
-        versionName = "7.0.0-alpha1"
+        versionCode = 2
+        versionName = "7.0.0-alpha2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

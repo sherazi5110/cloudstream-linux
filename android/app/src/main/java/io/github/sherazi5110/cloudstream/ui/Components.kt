@@ -150,6 +150,7 @@ fun PosterCard(
         ) {
             NetImage(item.posterUrl, Modifier.fillMaxSize(), item.posterHeaders)
             item.scoreText()?.let { ScoreBadge(it, Modifier.align(Alignment.TopStart).padding(6.dp)) }
+            PosterRating(item, Modifier.align(Alignment.BottomStart).padding(6.dp))
         }
         Text(
             item.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -278,3 +279,24 @@ val isTv: Boolean get() = App.isTv
 
 /** Minutes as "2h 4m". */
 fun formatMinutes(minutes: Int): String = if (minutes >= 60) "${minutes / 60}h ${minutes % 60}m" else "${minutes}m"
+
+/** TMDB / IMDb / AniList facts for a title page or banner (null until loaded, or when nothing matched). */
+@Composable
+fun rememberMetadata(r: com.lagradost.cloudstream3.LoadResponse?): io.github.sherazi5110.cloudstream.Metadata.Info? {
+    val state = androidx.compose.runtime.produceState<io.github.sherazi5110.cloudstream.Metadata.Info?>(null, r?.url) {
+        value = r?.let { runCatching { io.github.sherazi5110.cloudstream.Metadata.details(it) }.getOrNull() }
+    }
+    return state.value
+}
+
+/** "TMDB 8.4" on a poster (when a TMDB key is set and poster ratings are on). */
+@Composable
+fun PosterRating(item: SearchResponse, modifier: Modifier = Modifier) {
+    val m = io.github.sherazi5110.cloudstream.Metadata
+    if (!m.posterRatings || !(m.hasTmdb || m.anilist)) return
+    val text = androidx.compose.runtime.produceState<String?>(null, item.url) { value = runCatching { m.posterRating(item) }.getOrNull() }.value ?: return
+    Text(text, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Palette.tmdb, modifier = modifier
+        .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(6.dp))
+        .border(1.dp, Palette.tmdb.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+        .padding(horizontal = 6.dp, vertical = 2.dp))
+}

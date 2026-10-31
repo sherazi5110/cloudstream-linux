@@ -82,11 +82,20 @@ fun ExtensionsScreen() {
         }
     }
 
+    var stremio by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Extensions", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
             if (busy) Spinner(Modifier.size(32.dp))
         }
+        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("CloudStream extensions", "Stremio add-ons").forEachIndexed { i, label ->
+                val on = (i == 1) == stremio
+                Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.card(RoundedCornerShape(50)) { stremio = i == 1 }
+                    .background(if (on) Palette.accent else Palette.surfaceHigh, RoundedCornerShape(50)).padding(horizontal = 16.dp, vertical = 8.dp))
+            }
+        }
+        if (stremio) { StremioTab(); return@Column }
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 // Wraps onto a second line on narrow phones.
@@ -261,32 +270,40 @@ fun RepositoryScreen(screen: Screen.Repository) {
     }
 }
 
-/** More (phone): extensions, and what phase 2 brings. */
+
+/** Stremio add-ons: install by manifest address (or stremio:// link); their catalogs join Home and Search. */
 @Composable
-fun MoreScreen() {
-    val context = LocalContext.current
-    val versionName = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() }
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
-            Logo(48.dp)
-            Column(Modifier.padding(start = 12.dp)) {
-                Text("CloudStream", style = MaterialTheme.typography.headlineSmall)
-                Text("Version ${versionName ?: "?"}", style = MaterialTheme.typography.bodySmall)
+private fun StremioTab() {
+    val scope = rememberCoroutineScope()
+    var version by remember { mutableStateOf(0) }
+    val addons = remember(version) { io.github.sherazi5110.cloudstream.StremioAddons.all() }
+    var url by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        item {
+            Text("Add-ons are installed by the address of their manifest.json (or a stremio:// link). Streams from every add-on that has them " +
+                "play in the built-in player; torrent-only add-ons aren't supported.", style = MaterialTheme.typography.bodySmall)
+            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(url, { url = it }, singleLine = true, modifier = Modifier.weight(1f), placeholder = { Text("https://…/manifest.json") })
+                PillButton("Install", Icons.Filled.Download, Modifier.padding(start = 10.dp), compact = true) {
+                    if (url.isBlank() || busy) return@PillButton
+                    busy = true
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) { runCatching { io.github.sherazi5110.cloudstream.StremioAddons.install(url) } }
+                        busy = false
+                        r.onSuccess { App.toast("Installed ${it.manifest.name}"); url = ""; version++ }.onFailure { App.toast(it.message ?: "Not a Stremio add-on") }
+                    }
+                }
+            }
+            if (busy) Spinner(Modifier.fillMaxWidth().height(48.dp))
+        }
+        items(addons, key = { it.url }) { a ->
+            ListRow(a.manifest.name, listOf("v${a.manifest.version}", a.manifest.types.joinToString(", "), a.manifest.description).filter { it.isNotBlank() }.joinToString(" · "),
+                a.manifest.logo) {
+                androidx.compose.material3.Switch(a.enabled, onCheckedChange = { io.github.sherazi5110.cloudstream.StremioAddons.setEnabled(a.url, it); version++ },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Palette.accent))
+                IconAction(Icons.Filled.Delete, "Remove") { io.github.sherazi5110.cloudstream.StremioAddons.remove(a.url); version++ }
             }
         }
-        ListRow("Extensions", "Repositories, install and update extensions", null, onClick = { Nav.select(Tab.EXTENSIONS) })
-        var layout by remember { mutableStateOf(io.github.sherazi5110.cloudstream.Settings.layout) }
-        val auto = if (io.github.sherazi5110.cloudstream.App.detectTv()) "TV" else "Phone"
-        ListRow("Layout: " + when (layout) { "tv" -> "TV (remote)"; "phone" -> "Phone (touch)"; else -> "Automatic ($auto)" },
-            "For devices that pick the wrong one. Applies when the app is restarted.", null, onClick = {
-                layout = when (layout) { "auto" -> "phone"; "phone" -> "tv"; else -> "auto" }
-                io.github.sherazi5110.cloudstream.Settings.layout = layout
-            })
-        ListRow("Settings, profiles, Live TV, Stremio add-ons", "Coming in the next update", null)
-        ListRow("Source code", "github.com/sherazi5110/cloudstream-linux", null, onClick = {
-            com.lagradost.cloudstream3.CloudStreamApp.openBrowser("https://github.com/sherazi5110/cloudstream-linux", context.findActivity())
-        })
-        Box(Modifier.weight(1f))
-        Text("Extensions and their content come from third parties; this app hosts nothing.", style = MaterialTheme.typography.bodySmall)
     }
 }

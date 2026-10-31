@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -51,6 +52,7 @@ val isWide: Boolean @Composable get() = LocalWide.current
 
 private fun Tab.icon(): ImageVector = when (this) {
     Tab.HOME -> Icons.Filled.Home
+    Tab.LIVE -> Icons.Filled.LiveTv
     Tab.SEARCH -> Icons.Filled.Search
     Tab.LIBRARY -> Icons.Filled.VideoLibrary
     Tab.EXTENSIONS -> Icons.Filled.Extension
@@ -62,6 +64,7 @@ fun AppRoot() {
     val top = Nav.top
     BackHandler(enabled = Nav.stack.isNotEmpty() || Nav.tab != Tab.HOME) { Nav.back() }
     BoxWithConstraints(Modifier.fillMaxSize().background(Palette.background)) {
+        if (ThemeState.mode == ThemeMode.GLASS) GlassBackdrop(Modifier.fillMaxSize())
         val wide = isTv || maxWidth > maxHeight
         CompositionLocalProvider(LocalWide provides wide) {
             if (top is Screen.Player) {
@@ -75,6 +78,7 @@ fun AppRoot() {
                 Box(Modifier.weight(1f)) { Content(top) }
                 if (top == null) BottomBar()
             }
+            ProfileOverlays()
         }
     }
 }
@@ -87,15 +91,17 @@ private fun Content(top: Screen?) {
         null -> holder.SaveableStateProvider(Nav.tab.name) {
             when (Nav.tab) {
                 Tab.HOME -> HomeScreen()
+                Tab.LIVE -> LiveTvScreen()
                 Tab.SEARCH -> SearchScreen()
                 Tab.LIBRARY -> LibraryScreen()
                 Tab.EXTENSIONS -> ExtensionsScreen()
-                Tab.MORE -> MoreScreen()
+                Tab.MORE -> SettingsScreen()
             }
         }
         is Screen.Details -> holder.SaveableStateProvider("details|${top.apiName}|${top.url}") { DetailsScreen(top) }
         is Screen.Catalog -> CatalogScreen(top)
         is Screen.Repository -> RepositoryScreen(top)
+        is Screen.SettingsPage -> SettingsPageScreen(top)
         is Screen.Player -> Unit
     }
 }
@@ -121,20 +127,22 @@ fun TopBar(modifier: Modifier = Modifier, start: @Composable () -> Unit = {}) {
             Icon(Icons.Filled.Search, null, tint = Color.White, modifier = Modifier.size(18.dp))
             Text("Search", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 8.dp))
         }
+        Spacer(Modifier.width(10.dp))
+        ProfileButton(30.dp, showName = true)
     }
 }
 
-/** Portrait: Home · Search · My list · More (Live TV joins in phase 2). */
+/** Portrait: Home · Live TV · Search · My list · More. */
 @Composable
 private fun BottomBar() {
     NavigationBar(containerColor = Palette.background.copy(alpha = 0.97f)) {
-        listOf(Tab.HOME, Tab.SEARCH, Tab.LIBRARY, Tab.MORE).forEach { tab ->
+        visibleTabs(listOf(Tab.HOME, Tab.LIVE, Tab.SEARCH, Tab.LIBRARY, Tab.MORE)).forEach { tab ->
             val selected = Nav.tab == tab || (tab == Tab.MORE && Nav.tab == Tab.EXTENSIONS)
             NavigationBarItem(
                 selected = selected,
                 onClick = { Nav.select(tab) },
                 icon = { Icon(tab.icon(), tab.label) },
-                label = { Text(tab.label) },
+                label = { Text(if (tab == Tab.MORE) "More" else tab.label, maxLines = 1) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = Palette.accent, selectedTextColor = Palette.accent,
                     indicatorColor = Palette.accent.copy(alpha = 0.18f),
@@ -149,15 +157,16 @@ private fun BottomBar() {
 @Composable
 private fun Rail() {
     Column(
-        Modifier.fillMaxHeight().width(76.dp).background(Color(0xFF09090C)).systemBarsPadding().padding(vertical = 16.dp),
+        Modifier.fillMaxHeight().width(76.dp).background(Palette.rail).systemBarsPadding().padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Logo(42.dp)
         Spacer(Modifier.size(14.dp))
-        listOf(Tab.HOME, Tab.SEARCH, Tab.LIBRARY, Tab.EXTENSIONS).forEach { RailItem(it, it.icon()) }
+        visibleTabs(listOf(Tab.HOME, Tab.LIVE, Tab.SEARCH, Tab.LIBRARY, Tab.EXTENSIONS)).forEach { RailItem(it, it.icon()) }
         Spacer(Modifier.weight(1f))
-        RailItem(Tab.MORE, Icons.Filled.Settings)
+        if (!ProfileUi.current.kids) RailItem(Tab.MORE, Icons.Filled.Settings)
+        ProfileButton(36.dp)
     }
 }
 
@@ -171,5 +180,14 @@ private fun RailItem(tab: Tab, icon: ImageVector) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, tab.label, tint = if (selected) Palette.accent else Palette.muted, modifier = Modifier.size(24.dp))
+    }
+}
+
+/** Tabs this profile sees: no Live TV for kids unless allowed, no Extensions for kids. */
+private fun visibleTabs(tabs: List<Tab>): List<Tab> = tabs.filter { t ->
+    when (t) {
+        Tab.LIVE -> io.github.sherazi5110.cloudstream.LiveTv.availableToProfile
+        Tab.EXTENSIONS -> !ProfileUi.current.kids
+        else -> true
     }
 }

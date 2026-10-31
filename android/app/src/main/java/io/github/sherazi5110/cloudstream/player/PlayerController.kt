@@ -73,6 +73,8 @@ class PlayerController(
     val response: LoadResponse,
     val playable: Playable,
     chooseSource: Boolean,
+    /** Live TV channel: no progress or history, no seeking. */
+    live: Boolean = false,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val main = Handler(Looper.getMainLooper())
@@ -102,7 +104,8 @@ class PlayerController(
     private var grace: Job? = null
     private var watchdog: Job? = null
     private var saver: Job? = null
-    val isLive = response is LiveStreamLoadResponse
+    val isLive = live || response is LiveStreamLoadResponse
+    private var languagesApplied = false
 
     val playables = Engine.playables(response)
     val next: Playable? = playables.indexOfFirst { it.data == playable.data && it.dub == playable.dub }
@@ -114,7 +117,10 @@ class PlayerController(
         }
         player.setEventListener { e ->
             when (e.type) {
-                MediaPlayer.Event.Playing -> { playing = true; buffering = false; started = true; error = null; watchdog?.cancel() }
+                MediaPlayer.Event.Playing -> {
+                    playing = true; buffering = false; started = true; error = null; watchdog?.cancel()
+                    if (!languagesApplied) { languagesApplied = true; main.postDelayed({ applyLanguages() }, 1500) }
+                }
                 MediaPlayer.Event.Paused -> playing = false
                 MediaPlayer.Event.Buffering -> buffering = e.buffering < 100f
                 MediaPlayer.Event.TimeChanged -> { time = e.timeChanged; if (buffering && playing) buffering = false }
@@ -216,6 +222,25 @@ class PlayerController(
             error = "This source can't be played. Pick another one in Sources."
             buffering = false
         }
+    }
+
+    /** Picks the audio and subtitle languages from Settings → Player, once per playback. */
+    private fun applyLanguages() {
+        val audio = Settings.audioLanguage.split(',').map { it.trim() }.filter { it.isNotBlank() }
+        if (audio.isNotEmpty()) audioTracks().filter { it.id != -1 }.firstOrNull { t ->
+            audio.any { w -> io.github.sherazi5110.cloudstream.OnlineSubtitles.matches(t.name, w) || t.name.contains(w, ignoreCase = true) }
+        }?.let { setAudio(it.id) }
+        val subs = Settings.subtitleLanguage.split(',').map { it.trim() }.filter { it.isNotBlank() }
+        if (subs.isEmpty() || selectedSubtitle != null) return
+        val embedded = spuTracks().filter { it.id != -1 }.firstOrNull { t -> subs.any { w -> t.name.contains(w, ignoreCase = true) } }
+        if (embedded != null) { setSpu(embedded.id); return }
+        subtitles.firstOrNull { s -> subs.any { w -> io.github.sherazi5110.cloudstream.OnlineSubtitles.matches(s.lang, w) } }?.let { addSubtitle(it) }
+    }
+
+    /** A subtitle file downloaded from the internet (OpenSubtitles). */
+    fun addSubtitleFile(file: java.io.File) {
+        selectedSubtitle = file.absolutePath
+        player.addSlave(IMedia.Slave.Type.Subtitle, Uri.fromFile(file), true)
     }
 
     fun togglePause() = if (player.isPlaying) player.pause() else player.play()

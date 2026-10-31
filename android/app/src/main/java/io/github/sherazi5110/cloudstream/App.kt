@@ -37,6 +37,14 @@ object App {
     fun init(context: Context) {
         this.context = context
         Network.init()
+        io.github.sherazi5110.cloudstream.ui.ThemeState.load()
+        // A profile switch changes the look, the library and which extensions show.
+        Profiles.onChange {
+            io.github.sherazi5110.cloudstream.ui.ThemeState.load()
+            io.github.sherazi5110.cloudstream.ui.ProfileUi.refresh()
+            PluginManager.bumpVersion()
+        }
+        StremioAddons.onChange { PluginManager.bumpVersion() }
         scope.launch {
             val failures = PluginManager.loadAll()
             if (failures.isNotEmpty()) Log.w("plugins", "Failed: ${failures.keys}")

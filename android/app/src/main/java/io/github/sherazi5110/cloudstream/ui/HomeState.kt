@@ -68,7 +68,12 @@ fun rememberHomeState(): HomeState {
     DisposableEffect(Unit) {
         state.continueWatching = Library.continueWatching()
         val off = Library.onChange { state.continueWatching = Library.continueWatching() }
-        onDispose { off() }
+        // Another profile: its own history and catalog layout.
+        val offProfile = io.github.sherazi5110.cloudstream.Profiles.onChange {
+            state.continueWatching = Library.continueWatching()
+            state.catalogVersion++
+        }
+        onDispose { off(); offProfile() }
     }
     return state
 }
