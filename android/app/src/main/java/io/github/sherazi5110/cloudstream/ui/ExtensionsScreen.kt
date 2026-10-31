@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -88,7 +89,8 @@ fun ExtensionsScreen() {
         }
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Wraps onto a second line on narrow phones.
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     PillButton("Add repository", Icons.Filled.Add) { adding = true }
                     PillButton("Update all", Icons.Filled.Refresh, primary = false) {
                         busy = true
