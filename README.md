@@ -2,6 +2,10 @@
 
 Run **CloudStream extensions and Stremio add-ons on Ubuntu/Linux**, from the same repositories the Android app uses, with no changes to the extensions.
 
+> **Android app — coming soon.** A new app for **phones (touch)** and **Android TV (remote)**, with this app's look,
+> profiles, Live TV, Stremio add-ons, TMDB and VLC player, is being built in this repository.
+> [Preview below](#android-app-coming-soon).
+
 - **New look (6.0):** a slim icon rail, a clean top bar (source picker, search, your profile) and a full-width featured banner with backdrop, rating, "#1 in …", plot, *Play* and *More Info*. A new logo (a big C with an s inside, over a cloud) whose letters follow your theme colour.
 - **Live TV (6.0.1):** a Live TV page of its own (below Home in the rail) for IPTV: **M3U playlists with XMLTV guides**, **Xtream Codes** logins, and **Stremio / Nuvio TV add-ons** (add-ons with TV channel catalogs move here automatically) and playlist files. Channel logos come from the playlist, or from the open iptv-org database when missing. What's on now and next, categories from the playlist's groups, favourites, recently watched, channel search and a country filter. Live TV sources never appear on Home.
 - **Metadata & integrations (6.0.1):** add your free **TMDB** API key for ratings on posters, wide backdrops and title logos, cast with photos, trailers and similar titles on every extension; **IMDb ratings via Cinemeta** and **AniList** scores for anime need no key.
@@ -49,6 +53,32 @@ Run **CloudStream extensions and Stremio add-ons on Ubuntu/Linux**, from the sam
 
 See **[docs/ANALYSIS.md](docs/ANALYSIS.md)** for how the Android app works, and **[docs/PLAYER-AND-CATALOGS.md](docs/PLAYER-AND-CATALOGS.md)** for how the built-in player, online subtitles and catalogs work (VLC source, the other Linux app, and this code), all with file and line references.
 
+## Android app (coming soon)
+
+**Not released yet: these are the approved design previews**, not screenshots of a finished app. The Android app is a
+new app (not a fork of the official one) with the same look, features and simplicity as the Linux app.
+
+| | |
+|---|---|
+| ![Phone: Home and title page (design preview)](docs/android/mock-phone.png) | ![Phone: VLC player (design preview)](docs/android/mock-phone-player.png) |
+| ![Android TV: Home with remote focus (design preview)](docs/android/mock-tv.png) | ![Android TV: Live TV (design preview)](docs/android/mock-tv-live.png) |
+
+**Layouts**
+- **Phone and tablet (touch):** a swipeable featured banner, Continue Watching, catalog rows, and a bottom bar
+  (Home · Live TV · Search · My list · More). Long-press a card to mark it watched or remove it. Title pages have
+  TMDB/IMDb ratings, one big Resume button, seasons and episodes.
+- **Player (VLC):** sources, subtitles (also online), audio, speed and zoom, like on Linux, plus phone gestures:
+  swipe left side for brightness, right side for volume, double-tap for ±10 s, pinch to zoom, and a lock button.
+- **Android TV (remote):** the Linux icon rail, a banner that follows the focused title, a white ring on the focused
+  card, large text. Arrows move, OK opens, Back goes back, Menu marks watched/removes. CH+/CH− switch Live TV channels.
+
+**How it works:** CloudStream extensions load natively (no translation step, unlike on Linux). Stremio add-ons, Live TV
+(M3U/XMLTV, Xtream, Stremio TV add-ons), TMDB/IMDb/AniList metadata, profiles, kids profiles with a parent PIN and the
+adult-content setting come over from the Linux app.
+
+**Install (planned):** each release will include an `.apk` next to the Linux files. See
+[INSTALL.md → Android](INSTALL.md#android-coming-soon). Plan and status: [docs/ANDROID-PLAN.md](docs/ANDROID-PLAN.md).
+
 ## How it works
 
 ```
@@ -88,7 +118,7 @@ Or build a self-contained `.deb` with a bundled Java runtime:
 ./scripts/build-deb.sh                 # build/cloudstream-linux_<version>_amd64.deb
 ./scripts/uninstall-user-install.sh    # only if you used install.sh before (keeps your data)
 ./scripts/build-flatpak.sh             # build/cloudstream-linux.flatpak (needs flatpak-builder)
-sudo apt install ./build/cloudstream-linux_4.0.0_amd64.deb   # pulls in libVLC
+sudo apt install ./build/cloudstream-linux_6.0.1_amd64.deb   # pulls in libVLC
 # remove later with: sudo apt remove cloudstream-linux
 ```
 
