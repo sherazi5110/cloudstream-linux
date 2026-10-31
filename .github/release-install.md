@@ -13,7 +13,7 @@
 <summary><b>Install the .deb</b> (Ubuntu, Debian, Mint, ChromeOS)</summary>
 
 ```bash
-wget -O /tmp/cloudstream-linux.deb https://github.com/sherazi5110/cloudstream-linux/releases/download/{{TAG}}/cloudstream-linux_{{VERSION}}_amd64.deb
+wget -O /tmp/cloudstream-linux.deb https://github.com/sherazi5110/cloudstream-Linxdroid/releases/download/{{TAG}}/cloudstream-linux_{{VERSION}}_amd64.deb
 sudo apt install /tmp/cloudstream-linux.deb
 ```
 Or, after downloading it in the browser: `cd ~/Downloads && sudo apt install ./cloudstream-linux_{{VERSION}}_amd64.deb`
@@ -28,7 +28,7 @@ To remove: `sudo apt remove cloudstream-linux`.
 
 ```bash
 flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-wget -O /tmp/cloudstream-linux.flatpak https://github.com/sherazi5110/cloudstream-linux/releases/download/{{TAG}}/cloudstream-linux.flatpak
+wget -O /tmp/cloudstream-linux.flatpak https://github.com/sherazi5110/cloudstream-Linxdroid/releases/download/{{TAG}}/cloudstream-linux.flatpak
 flatpak install --user /tmp/cloudstream-linux.flatpak
 flatpak run io.github.sherazi5110.CloudStreamLinux
 ```
@@ -63,13 +63,13 @@ use the universal one.
 2. Allow it to install apps: **Fire TV:** Settings → My Fire TV → Developer options → Install unknown apps.
    **Android/Google TV:** Settings → Apps → Security & restrictions → Unknown sources.
 3. In Downloader, enter
-   `https://github.com/sherazi5110/cloudstream-linux/releases/download/{{TAG}}/cloudstream-android-armeabi-v7a.apk`
+   `https://github.com/sherazi5110/cloudstream-Linxdroid/releases/download/{{TAG}}/cloudstream-android-armeabi-v7a.apk`
    (or the `arm64-v8a` one for newer TVs) and choose **Install**.
 
 Or copy the `.apk` to a USB stick and open it with a file manager on the TV, or: `adb install -r cloudstream-android-armeabi-v7a.apk`.
 </details>
 
-Full guide, other distros and troubleshooting: [INSTALL.md](https://github.com/sherazi5110/cloudstream-linux/blob/main/INSTALL.md).
+Full guide, other distros and troubleshooting: [INSTALL.md](https://github.com/sherazi5110/cloudstream-Linxdroid/blob/main/INSTALL.md).
 
 ---
 
