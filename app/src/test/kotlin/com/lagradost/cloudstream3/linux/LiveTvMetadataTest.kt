@@ -74,6 +74,13 @@ class LiveTvMetadataTest {
         assertNotNull(now); assertNotNull(next)
         assertTrue(now.start <= System.currentTimeMillis() && System.currentTimeMillis() < now.stop)
         assertTrue(now.title.startsWith("News 24 show"))
+        // The guide grid: six half-hour programmes, in order, inside the window asked for.
+        val t = System.currentTimeMillis()
+        val grid = LiveTv.programmes(channels[0], t - 3600_000L, t + 6 * 3600_000L)
+        assertEquals(6, grid.size)
+        assertEquals(grid.sortedBy { it.start }, grid)
+        assertTrue(LiveTv.hasGuide())
+        assertEquals(1, LiveTv.programmes(channels[0], now.start, now.stop).size)
 
         assertTrue(LiveTv.toggleFavourite(channels[2]))
         assertEquals(setOf(channels[2].key), LiveTv.favourites())

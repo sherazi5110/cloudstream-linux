@@ -406,6 +406,15 @@ object LiveTv {
         return local.toInstant(offset).toEpochMilli()
     }
 
+    /** The guide for [channel] between [from] and [to] (for the TV guide grid); empty when none covers it. */
+    fun programmes(channel: Channel, from: Long, to: Long): List<Programme> {
+        val list = synchronized(guide) { guide[channel.epgId ?: channel.name] ?: guide[channel.name] } ?: return emptyList()
+        return list.filter { it.stop > from && it.start < to }
+    }
+
+    /** Whether any guide is loaded at all. */
+    fun hasGuide(): Boolean = synchronized(guide) { guide.isNotEmpty() }
+
     /** What's on now and next on [channel], if a guide covers it. */
     fun nowNext(channel: Channel, at: Long = System.currentTimeMillis()): Pair<Programme?, Programme?> {
         val list = synchronized(guide) { guide[channel.epgId ?: channel.name] ?: guide[channel.name] } ?: return null to null

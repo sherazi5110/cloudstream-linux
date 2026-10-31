@@ -76,6 +76,16 @@ object Screenshots {
             com.lagradost.cloudstream3.linux.LiveTv.saved().forEach { com.lagradost.cloudstream3.linux.LiveTv.remove(it.id) }
             System.exit(0)
         }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "guide") {
+            runCatching { com.lagradost.cloudstream3.linux.LiveTv.add(com.lagradost.cloudstream3.linux.LiveTv.Kind.M3U, "http://localhost:8766/iptv/playlist.m3u", "Free-TV", "http://localhost:8766/iptv/guide.xml") }
+            window.show(Tab.LIVE)
+            delay(4000)
+            window.lookupAll(".topbar-source").map { it as javafx.scene.control.Button }.firstOrNull { it.text == "TV guide" }?.fire()
+            delay(2500)
+            capture(window, "$prefix-livetv-guide.png")
+            com.lagradost.cloudstream3.linux.LiveTv.saved().forEach { com.lagradost.cloudstream3.linux.LiveTv.remove(it.id) }
+            System.exit(0)
+        }
         if (System.getenv("CS_SCREENSHOT_ONLY") == "kids") {
             // The only profile set to kids, before parent PINs existed: the way out.
             val me = com.lagradost.cloudstream3.linux.Profiles.current

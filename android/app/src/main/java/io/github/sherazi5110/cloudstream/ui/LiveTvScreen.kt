@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Icon
@@ -168,6 +170,52 @@ private fun LiveContent(all: List<LiveTv.Channel>, now: Long, guideVersion: Int,
     var selected by remember { mutableStateOf<LiveTv.Channel?>(null) }
     val banner = selected ?: recent.firstOrNull() ?: shown.firstOrNull()
     val edge = if (wide) 40.dp else 16.dp
+    var guide by remember { mutableStateOf(false) }
+
+    val toolbar: @Composable () -> Unit = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(query, { query = it }, singleLine = true, placeholder = { Text("Search channels") },
+                    leadingIcon = { Icon(Icons.Filled.Search, null) }, shape = RoundedCornerShape(50),
+                    colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Palette.surface, focusedContainerColor = Palette.surface,
+                        unfocusedBorderColor = Color.Transparent, focusedBorderColor = Palette.accent),
+                    modifier = Modifier.weight(1f).widthIn(max = 420.dp))
+                Spacer(Modifier.weight(0.01f))
+                IconAction(if (guide) Icons.Filled.GridView else Icons.Filled.Schedule, if (guide) "Channels" else "TV guide") { guide = !guide }
+                IconAction(Icons.Filled.Refresh, "Refresh") { onRefresh() }
+                IconAction(Icons.Filled.Settings, "Live TV sources") {
+                    ProfileUi.guarded { if (wide) Nav.select(Tab.MORE) else Nav.open(Screen.SettingsPage(Section.LIVETV.name)) }
+                }
+            }
+    }
+    val chipRow: @Composable () -> Unit = {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+                val chips = listOf("All", "★ Favourites") + groups.take(40)
+                items(chips) { g ->
+                    val on = g == filter
+                    val count = when (g) { "All" -> all.size; "★ Favourites" -> favourites.size; else -> null }
+                    Text(listOfNotNull(g, count?.toString()).joinToString(" "), style = MaterialTheme.typography.labelMedium, modifier = Modifier
+                        .card(RoundedCornerShape(50)) { filter = g }
+                        .background(if (on) Palette.accent else Palette.surfaceHigh, RoundedCornerShape(50))
+                        .padding(horizontal = 14.dp, vertical = 8.dp))
+                }
+            }
+    }
+
+    if (guide) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().padding(start = edge, end = edge, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            toolbar()
+            chipRow()
+            val sorted = remember(shown, favourites) { shown.sortedByDescending { it.key in favourites } }
+            when {
+                !LiveTv.hasGuide() -> EmptyState("No TV guide yet",
+                    "None of your sources has a guide (XMLTV) loaded. Xtream logins include one; for an M3U playlist add its guide address in Settings → Live TV.",
+                    Modifier.fillMaxWidth(), button = "Refresh guide") { onRefresh() }
+                sorted.isEmpty() -> EmptyState("No channels", if (query.isNotBlank()) "Nothing matches \"$query\"." else "This list is empty.", Modifier.fillMaxWidth())
+                else -> GuideGrid(sorted.take(400), now, guideVersion, wide, onPlay = { LivePlayback.play(scope, it, sorted) }, modifier = Modifier.weight(1f))
+            }
+        }
+        return
+    }
 
     LazyVerticalGrid(
         if (wide) GridCells.Adaptive(220.dp) else GridCells.Adaptive(160.dp),
@@ -180,33 +228,8 @@ private fun LiveContent(all: List<LiveTv.Channel>, now: Long, guideVersion: Int,
                 onWatch = { LivePlayback.play(scope, c, shown.ifEmpty { all }) },
                 onFavourite = { LiveTv.toggleFavourite(c); favVersion++ }) }
         }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(query, { query = it }, singleLine = true, placeholder = { Text("Search channels") },
-                    leadingIcon = { Icon(Icons.Filled.Search, null) }, shape = RoundedCornerShape(50),
-                    colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Palette.surface, focusedContainerColor = Palette.surface,
-                        unfocusedBorderColor = Color.Transparent, focusedBorderColor = Palette.accent),
-                    modifier = Modifier.weight(1f).widthIn(max = 420.dp))
-                Spacer(Modifier.weight(0.01f))
-                IconAction(Icons.Filled.Refresh, "Refresh") { onRefresh() }
-                IconAction(Icons.Filled.Settings, "Live TV sources") {
-                    ProfileUi.guarded { if (wide) Nav.select(Tab.MORE) else Nav.open(Screen.SettingsPage(Section.LIVETV.name)) }
-                }
-            }
-        }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
-                val chips = listOf("All", "★ Favourites") + groups.take(40)
-                items(chips) { g ->
-                    val on = g == filter
-                    val count = when (g) { "All" -> all.size; "★ Favourites" -> favourites.size; else -> null }
-                    Text(listOfNotNull(g, count?.toString()).joinToString(" "), style = MaterialTheme.typography.labelMedium, modifier = Modifier
-                        .card(RoundedCornerShape(50)) { filter = g }
-                        .background(if (on) Palette.accent else Palette.surfaceHigh, RoundedCornerShape(50))
-                        .padding(horizontal = 14.dp, vertical = 8.dp))
-                }
-            }
-        }
+        item(span = { GridItemSpan(maxLineSpan) }) { toolbar() }
+        item(span = { GridItemSpan(maxLineSpan) }) { chipRow() }
         if (recent.isNotEmpty() && filter == "All" && query.isBlank()) {
             item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle("Recently watched", Modifier.padding(top = 8.dp)) }
             items(recent.take(if (wide) 5 else 4), key = { "recent|" + it.key }) { c ->
