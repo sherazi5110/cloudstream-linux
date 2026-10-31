@@ -45,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/anilist"):
             title = body.get("variables", {}).get("s", "")
             if "pixel" in title.lower():
-                return self.send(200, json.dumps({"data": {"Media": {"averageScore": 84, "bannerImage": None, "description": "Anime <b>Pixel</b>.", "title": {"romaji": "Pikuseru", "english": "Pixel City"}}}}))
+                return self.send(200, json.dumps({"data": {"Media": {"idMal": 4242, "averageScore": 84, "bannerImage": None, "description": "Anime <b>Pixel</b>.", "title": {"romaji": "Pikuseru", "english": "Pixel City"}}}}))
             return self.send(200, json.dumps({"data": {"Media": None}}))
         return self.send(404, "{}")
 
@@ -283,6 +283,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, json.dumps([{"channel": "News24.uk", "feed": None, "in_use": True, "width": 300, "format": "PNG", "url": f"{root}/media/poster.png"},
                                                   {"channel": "News24.uk", "feed": None, "in_use": True, "width": 900, "format": "SVG", "url": f"{root}/x.svg"},
                                                   {"channel": "CartoonFun.us", "feed": None, "in_use": True, "width": 200, "format": "PNG", "url": f"{root}/media/ep_1.jpg"}]))
+        if parts[:3] == ["aniskip", "v2", "skip-times"] and len(parts) == 5:
+            if parts[3] != "4242":
+                return self.send(404, json.dumps({"found": False, "results": []}))
+            return self.send(200, json.dumps({"found": True, "results": [
+                {"interval": {"startTime": 5.5, "endTime": 95.0}, "skipType": "op", "episodeLength": 1420},
+                {"interval": {"startTime": 1330.0, "endTime": 1420.0}, "skipType": "ed", "episodeLength": 1420}]}))
         if parts == ["webpage"]:
             # Like a GitHub repository page: HTML that merely mentions #EXTINF in its README.
             return self.send(200, "<!DOCTYPE html><html><body><pre>#EXTM3U\n#EXTINF:-1,Example\nhttp://x/1.m3u8\n#EXTINF:-1,Two\nhttp://x/2.m3u8</pre></body></html>", "text/html")

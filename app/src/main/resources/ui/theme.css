@@ -752,3 +752,17 @@
 .popover-tune .icon { -fx-background-color: -cs-muted; }
 .popover-tune:hover { -fx-background-color: -cs-surface-3; }
 .popover-tune:hover .icon { -fx-background-color: -cs-accent; }
+/* ---------- 7.0: skip intro, next-episode countdown ---------- */
+.player-skip {
+    -fx-background-color: rgba(20,20,26,0.82); -fx-text-fill: white; -fx-font-size: 15px; -fx-font-weight: bold;
+    -fx-background-radius: 10; -fx-border-color: rgba(255,255,255,0.55); -fx-border-radius: 10; -fx-padding: 12 22 12 18; -fx-cursor: hand;
+}
+.player-skip .icon { -fx-background-color: white; }
+.player-skip:hover { -fx-background-color: -cs-accent; -fx-border-color: -cs-accent; }
+.player-next {
+    -fx-background-color: rgba(16,16,22,0.92); -fx-background-radius: 14; -fx-border-color: rgba(255,255,255,0.18);
+    -fx-border-radius: 14; -fx-padding: 16 18 16 18; -fx-min-width: 280;
+}
+.player-next-label { -fx-text-fill: -cs-accent; -fx-font-size: 11px; -fx-font-weight: bold; }
+.player-next-title { -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; }
+.player-next-count { -fx-text-fill: rgba(255,255,255,0.75); -fx-font-size: 13px; }

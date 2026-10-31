@@ -217,7 +217,11 @@ private fun PlayerSection() {
     var autoPlay by remember { mutableStateOf(Settings.autoPlay) }
     SwitchRow("Start the best source automatically", "Otherwise you pick from the list.", autoPlay) { autoPlay = it; Settings.autoPlay = it }
     var next by remember { mutableStateOf(Settings.autoPlayNext) }
-    SwitchRow("Play the next episode automatically", null, next) { next = it; Settings.autoPlayNext = it }
+    SwitchRow("Play the next episode automatically", "Counts down from the credits; Cancel stays on this episode", next) { next = it; Settings.autoPlayNext = it }
+    var skipBtns by remember { mutableStateOf(Settings.skipButtons) }
+    SwitchRow("Skip intro buttons (anime)", "Intro, recap and credits times from AniSkip", skipBtns) { skipBtns = it; Settings.skipButtons = it }
+    var autoSkip by remember { mutableStateOf(Settings.autoSkip) }
+    SwitchRow("Skip intros automatically (anime)", null, autoSkip) { autoSkip = it; Settings.autoSkip = it }
     Heading("Preferred quality")
     var quality by remember { mutableStateOf(Settings.preferredQuality) }
     ChoiceChips(listOf(0, 2160, 1080, 720, 480), { if (it == 0) "Best" else "${it}p" }, { it == quality }) { quality = it; Settings.preferredQuality = it }

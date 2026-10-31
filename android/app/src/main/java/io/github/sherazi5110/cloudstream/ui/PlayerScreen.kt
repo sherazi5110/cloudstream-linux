@@ -131,6 +131,18 @@ fun PlayerScreen(screen: Screen.Player) {
     var poke by remember { mutableIntStateOf(0) } // any interaction restarts the hide timer
     var pinch by remember { mutableFloatStateOf(1f) }
     val rootFocus = remember { FocusRequester() }
+    // Next-episode countdown: shown from the credits (or 20 s before the end); seeking back resets it.
+    var countdownLeft by remember(c) { mutableIntStateOf(-1) } // -1 = not showing
+    var countdownCancelled by remember(c) { mutableStateOf(false) }
+    val countdownAt = c.countdownStart()
+    val inCountdown = Settings.autoPlayNext && countdownAt != null && c.started && c.time >= countdownAt && !c.ended
+    LaunchedEffect(inCountdown) { if (!inCountdown) { countdownLeft = -1; countdownCancelled = false } }
+    LaunchedEffect(inCountdown, countdownCancelled) {
+        if (!inCountdown || countdownCancelled) { countdownLeft = -1; return@LaunchedEffect }
+        for (n in 10 downTo 1) { countdownLeft = n; delay(1000) }
+        c.next?.let { Nav.replace(Screen.Player(c.api, c.response, it)) }
+    }
+    val playNext: () -> Unit = { c.next?.let { Nav.replace(Screen.Player(c.api, c.response, it)) } }
 
     DisposableEffect(c) { onDispose { c.release() } }
 
@@ -179,6 +191,7 @@ fun PlayerScreen(screen: Screen.Player) {
     BackHandler {
         when {
             sheet != null -> sheet = null
+            countdownLeft > 0 -> countdownCancelled = true
             isTv && controls && c.started -> controls = false
             else -> Nav.back()
         }
@@ -200,7 +213,9 @@ fun PlayerScreen(screen: Screen.Player) {
                     KeyEvent.KEYCODE_MEDIA_NEXT -> { c.next?.let { Nav.replace(Screen.Player(c.api, c.response, it)) }; true }
                     KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> zap(-1)
                     KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> zap(1)
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (!controls && c.started && sheet == null) { c.togglePause(); controls = true; true } else false
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> if (!controls && sheet == null && countdownLeft > 0) { playNext(); true }
+                        else if (!controls && sheet == null && c.activeSegment != null) { c.skipSegment(); true }
+                        else if (!controls && c.started && sheet == null) { c.togglePause(); controls = true; true } else false
                     KeyEvent.KEYCODE_DPAD_LEFT -> if (!controls && c.started && sheet == null) { c.seekBy(-10_000); true } else false
                     KeyEvent.KEYCODE_DPAD_RIGHT -> if (!controls && c.started && sheet == null) { c.seekBy(10_000); true } else false
                     KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_MENU ->
@@ -234,9 +249,36 @@ fun PlayerScreen(screen: Screen.Player) {
             } else AnimatedVisibility(controls, enter = fadeIn(), exit = fadeOut()) {
                 Controls(c, onSheet = { sheet = it }, onLock = { locked = true; poke++ }, poke = { poke++ })
             }
+            val seg = c.activeSegment
+            if (countdownLeft > 0) {
+                NextEpisodeCard(c, countdownLeft, Modifier.align(Alignment.BottomEnd).padding(end = 36.dp, bottom = 110.dp),
+                    onPlay = playNext, onCancel = { countdownCancelled = true })
+            } else if (seg != null && !locked) {
+                PillButton(seg.kind.label + (if (isTv && !controls) "  (OK)" else ""), Icons.Filled.SkipNext,
+                    Modifier.align(Alignment.BottomEnd).padding(end = 36.dp, bottom = 110.dp), primary = false) { c.skipSegment() }
+            }
         }
 
         sheet?.let { s -> SheetPanel(s, c, Modifier.align(Alignment.CenterEnd), onOpen = { sheet = it }) { sheet = null } }
+    }
+}
+
+/** "Next episode in N s" with Play now / Cancel. OK on the remote plays, Back cancels. */
+@Composable
+private fun NextEpisodeCard(c: PlayerController, left: Int, modifier: Modifier, onPlay: () -> Unit, onCancel: () -> Unit) {
+    val next = c.next ?: return
+    Column(
+        modifier.widthIn(max = 340.dp).background(Color.Black.copy(alpha = 0.78f), RoundedCornerShape(14.dp)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("NEXT EPISODE", style = MaterialTheme.typography.labelMedium, color = Palette.muted)
+        Text(listOfNotNull(next.label, next.name?.takeIf { it != next.label }).joinToString(" · "),
+            style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text("Starts in $left s", style = MaterialTheme.typography.bodyMedium, color = Palette.muted)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PillButton("Play now", Icons.Filled.PlayArrow, compact = true, onClick = onPlay)
+            PillButton("Cancel", null, primary = false, compact = true, onClick = onCancel)
+        }
     }
 }
 

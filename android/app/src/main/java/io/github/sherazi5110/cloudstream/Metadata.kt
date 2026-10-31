@@ -358,8 +358,9 @@ object Metadata {
         info.takeIf { it.tmdbId != null || it.imdbRating != null || it.anilistScore != null }
     }
 
-    private suspend fun anilistMedia(title: String): JSONObject? = cached(cacheKey("anilist", title)) {
-        val query = "query(\$s:String){Media(search:\$s,type:ANIME){averageScore bannerImage description(asHtml:false) title{romaji english}}}"
+    /** AniList's entry for an anime title (score, banner, description, MyAnimeList id). */
+    internal suspend fun anilistMedia(title: String): JSONObject? = cached(cacheKey("anilist2", title)) {
+        val query = "query(\$s:String){Media(search:\$s,type:ANIME){idMal averageScore bannerImage description(asHtml:false) title{romaji english}}}"
         val body = JSONObject().put("query", query).put("variables", JSONObject().put("s", title)).toString()
         val request = Request.Builder().url(anilistBase).post(body.toRequestBody("application/json".toMediaType()))
             .header("Accept", "application/json").build()

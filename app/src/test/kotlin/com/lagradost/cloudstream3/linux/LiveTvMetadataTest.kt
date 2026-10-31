@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.newMovieSearchResponse
+import com.lagradost.cloudstream3.newAnimeLoadResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -42,6 +43,7 @@ class LiveTvMetadataTest {
         System.setProperty("cs.tmdb.base", "$base/tmdb/3")
         System.setProperty("cs.tmdb.images", "$base/tmdbimg/")
         System.setProperty("cs.anilist", "$base/anilist")
+        System.setProperty("cs.aniskip", "$base/aniskip")
     }
 
     @AfterTest
@@ -204,6 +206,12 @@ class LiveTvMetadataTest {
         assertNull(Metadata.details(film)?.tmdbId)
         Metadata.chooseMatch(film.apiName, film.url, null, automatic = true)
         assertEquals(501, Metadata.details(film)!!.tmdbId)
+        // Skip intro: the MyAnimeList id comes from AniList, the times from AniSkip.
+        val anime = demo.newAnimeLoadResponse("Pixel Anime", "$base/anime/pixel", TvType.Anime) {}
+        val segs = SkipTimes.forEpisode(anime, 1, 1_420_000)
+        assertEquals(listOf(SkipTimes.Kind.INTRO, SkipTimes.Kind.CREDITS), segs.map { it.kind })
+        assertEquals(5500L to 95_000L, segs[0].start to segs[0].end)
+        assertTrue(SkipTimes.forEpisode(film, 1, 1_000_000).isEmpty(), "only anime")
         // AniList for anime when TMDB has nothing.
         Metadata.tmdbKey = ""
         assertEquals("AniList 8.4", Metadata.posterRating(demo.newMovieSearchResponse("Pixel Anime", "u3", TvType.Anime)))
