@@ -363,7 +363,7 @@ private fun AboutSection() {
         }
     }
     PillButton("Source code on GitHub", null, primary = false, compact = true) {
-        com.lagradost.cloudstream3.CloudStreamApp.openBrowser("https://github.com/sherazi5110/cloudstream-linux", context.findActivity())
+        com.lagradost.cloudstream3.CloudStreamApp.openBrowser("https://github.com/sherazi5110/cloudstream-Linxdroid", context.findActivity())
     }
     Hint("GPL-3.0. Extensions and their content come from third parties; this app hosts nothing.")
 }

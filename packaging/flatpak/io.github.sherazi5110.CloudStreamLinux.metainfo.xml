@@ -25,15 +25,15 @@
     </ul>
   </description>
   <launchable type="desktop-id">io.github.sherazi5110.CloudStreamLinux.desktop</launchable>
-  <url type="homepage">https://github.com/sherazi5110/cloudstream-linux</url>
-  <url type="bugtracker">https://github.com/sherazi5110/cloudstream-linux/issues</url>
+  <url type="homepage">https://github.com/sherazi5110/cloudstream-Linxdroid</url>
+  <url type="bugtracker">https://github.com/sherazi5110/cloudstream-Linxdroid/issues</url>
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/sherazi5110/cloudstream-linux/main/docs/screenshots/home.png</image>
+      <image>https://raw.githubusercontent.com/sherazi5110/cloudstream-Linxdroid/main/docs/screenshots/home.png</image>
       <caption>Home</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/sherazi5110/cloudstream-linux/main/docs/screenshots/player.png</image>
+      <image>https://raw.githubusercontent.com/sherazi5110/cloudstream-Linxdroid/main/docs/screenshots/player.png</image>
       <caption>Built-in player</caption>
     </screenshot>
   </screenshots>
