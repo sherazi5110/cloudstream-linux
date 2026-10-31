@@ -13,9 +13,27 @@ android {
         applicationId = "io.github.sherazi5110.cloudstream"
         minSdk = 23
         targetSdk = 36
-        versionCode = 2
-        versionName = "7.0.0-alpha2"
+        // CI passes the release tag (-PappVersion=7.0.0); local builds use the numbers below.
+        val tagVersion = (findProperty("appVersion") as String?)?.removePrefix("v")?.removePrefix("V")
+        versionName = tagVersion ?: "7.0.0-alpha2"
+        versionCode = tagVersion?.let { v ->
+            val (major, minor, patch) = (v.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 } + listOf(0, 0, 0)).take(3)
+            major * 10000 + minor * 100 + patch
+        } ?: 2
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // The release key comes from the environment (GitHub Actions secrets, see android/README.md) and is never
+    // committed. Without it, release builds are signed with the debug key: fine for testing, but each machine's
+    // debug key differs, so such builds can't update each other.
+    val keystore = System.getenv("CS_KEYSTORE")?.let { file(it) }?.takeIf { it.isFile }
+    signingConfigs {
+        if (keystore != null) create("release") {
+            storeFile = keystore
+            storePassword = System.getenv("CS_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("CS_KEY_ALIAS")
+            keyPassword = System.getenv("CS_KEY_PASSWORD") ?: System.getenv("CS_KEYSTORE_PASSWORD")
+        }
     }
 
     buildTypes {
@@ -23,8 +41,7 @@ android {
             // Extensions are loaded at runtime and call into the library, Jackson, OkHttp, jsoup, Rhino…
             // by name, so nothing may be renamed or removed.
             isMinifyEnabled = false
-            // Until the release keystore exists (phase 3), release builds are signed with the debug key.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

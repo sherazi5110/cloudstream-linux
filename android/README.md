@@ -14,8 +14,38 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties
 ./gradlew assembleRelease         # app/build/outputs/apk/release/app-<abi>-release.apk
 ```
 
-Needs JDK 17+ and the Android SDK (platform 36). Release builds are signed with the debug key until the
-release keystore is set up in phase 3.
+Needs JDK 17+ and the Android SDK (platform 36). `-PappVersion=7.0.0` sets the version (CI passes the release tag).
+
+## Release signing
+
+Android only installs an update over an existing app when both are signed with the same key, so releases must always
+use one key. It lives in GitHub Actions secrets, never in the repository. Create it once (keep the file and passwords
+safe: if the key is lost, users have to uninstall to move to a new one):
+
+```bash
+keytool -genkeypair -v -keystore cloudstream-release.jks -alias cloudstream -keyalg RSA -keysize 4096 -validity 36500
+base64 -w0 cloudstream-release.jks > keystore.b64
+```
+
+Then in the repository: Settings → Secrets and variables → Actions → New repository secret:
+
+| Secret | Value |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | the contents of `keystore.b64` |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
+| `ANDROID_KEY_ALIAS` | `cloudstream` |
+| `ANDROID_KEY_PASSWORD` | the key password (if different from the keystore password) |
+
+Locally, the same key is used when `CS_KEYSTORE`, `CS_KEYSTORE_PASSWORD`, `CS_KEY_ALIAS` (and `CS_KEY_PASSWORD`) are
+set. Without them, release builds are signed with the machine's debug key (fine for testing, but they can't update or
+be updated by builds from other machines).
+
+## CI and releases
+
+The `android` job in `.github/workflows/build.yml` builds the APKs on every push and pull request (artifact
+`cloudstream-android`) and, for a tag such as `V7.0.0`, attaches them to the same release as the `.deb`, `.flatpak`
+and `.tar`, named `cloudstream-android-<abi>.apk` so `releases/latest/download/…` links keep working. Install
+instructions for every file are added to the release notes from `.github/release-install.md`.
 
 APKs: `arm64-v8a` (most phones, newer TVs), `armeabi-v7a` (many Android TV boxes and Fire TV sticks),
 `x86_64`/`x86` (emulators, a few Chromebooks) and `universal` (all of them, larger).

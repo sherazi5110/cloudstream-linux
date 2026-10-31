@@ -1,13 +1,21 @@
-# Install CloudStream for Linux
+# Install CloudStream
 
-> **Android:** an Android app (phones and Android TV) is being built in this repository. See
-> [Android (coming soon)](#android-coming-soon) at the end.
+Everything is on the [Releases page](https://github.com/sherazi5110/cloudstream-linux/releases). Pick the file for
+your device:
 
-One download works everywhere: **`cloudstream-linux_6.0.1_amd64.deb`** from the
-[Releases page](https://github.com/sherazi5110/cloudstream-linux/releases).
-It includes its own Java, so you don't need to install Java.
+| Your device | File | Section |
+|---|---|---|
+| Ubuntu, Debian, Mint, Pop!_OS, Zorin, elementary, ChromeOS (Linux) | `cloudstream-linux_<version>_amd64.deb` | [.deb](#ubuntu-debian-linux-mint-popos-zorin-elementary-os-chromeos-linux) |
+| Any Linux distro with Flatpak (Fedora, Arch, openSUSE, Steam Deck…) | `cloudstream-linux.flatpak` | [Flatpak](#flatpak-any-distro) |
+| Other x86-64 Linux without Flatpak | the `.deb` (unpacked by hand) | [Other Linux](#fedora-arch-manjaro-opensuse-and-other-x86-64-linux-without-flatpak) |
+| Linux, if you already have Java 21 | `cloudstream-linux-<tag>.tar` | [.tar](#the-tar-file-java-21-already-installed) |
+| Android phone or tablet | `cloudstream-android-arm64-v8a.apk` | [Android](#android-phones-tablets-and-android-tv) |
+| Android TV, Google TV, Fire TV, TV boxes | `cloudstream-android-armeabi-v7a.apk` (or arm64) | [Android TV](#android-tv-google-tv-fire-tv) |
+| Not sure which Android file | `cloudstream-android-universal.apk` (bigger, runs on all) | [Android](#android-phones-tablets-and-android-tv) |
 
-Requirements:
+The Linux `.deb` and `.flatpak` include their own Java, so you don't need to install Java.
+
+Requirements for the Linux app:
 - a 64-bit PC (x86-64 / amd64);
 - **VLC** (the built-in player uses VLC's engine);
 - a desktop session (GNOME, KDE, Xfce, Cinnamon, …).
@@ -152,6 +160,20 @@ rm -rf ~/.local/share/cloudstream-linux
 
 ---
 
+## The `.tar` file (Java 21 already installed)
+
+`cloudstream-linux-<tag>.tar` is the plain Java build, without its own Java. Use it if you already have Java 21 and
+VLC, or want to run the app without installing anything:
+```bash
+sudo apt install openjdk-21-jre libvlc5 vlc-plugin-base   # or your distro's Java 21 and VLC packages
+tar -xf cloudstream-linux-*.tar
+./cloudstream-linux/bin/cloudstream-linux
+```
+To update, unpack the new `.tar` over the old folder. To remove, delete the folder (your data is in
+`~/.local/share/cloudstream-linux`).
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
@@ -167,19 +189,65 @@ release.
 
 ---
 
-## Android (coming soon)
+## Android: phones, tablets and Android TV
 
-**Not released yet.** An Android app for **phones (touch)** and **Android TV (remote)** is being built in this
-repository (`android/`). When it's ready, each release will include an `.apk` next to the Linux files. The plan
-and the approved design are in [docs/ANDROID-PLAN.md](docs/ANDROID-PLAN.md).
+The Android app has the same look and features as the Linux app (Home, Search, Live TV, profiles, Stremio add-ons,
+TMDB and the VLC player), with a touch layout for phones and a remote layout for TV. It's **in testing**: expect
+rough edges, and please report what you find.
 
-Planned installation, once an `.apk` is on the [Releases page](https://github.com/sherazi5110/cloudstream-linux/releases):
+It installs **next to** the official CloudStream app (it has its own app ID), so you can keep both. Extensions are the
+same ones: add your repositories under Extensions.
 
-- **Phone or tablet:** download the `.apk` on the device, open it, and allow "Install unknown apps" for your
-  browser or file manager when Android asks.
-- **Android TV / Google TV / Fire TV:** install the free **Downloader** app (or use a USB stick and a file manager),
-  enable "Install unknown apps" for it in the TV's settings, then open the `.apk` link.
-- **From a computer:** `adb install cloudstream-*.apk` with USB or network debugging turned on.
+### Which file?
 
-It will install next to the official CloudStream app (different app ID), so you can keep both.
+| File | For |
+|---|---|
+| `cloudstream-android-arm64-v8a.apk` | most phones and tablets from the last ~8 years, newer TVs (Shield, Chromecast with Google TV, Fire TV 4K Max) |
+| `cloudstream-android-armeabi-v7a.apk` | older or cheaper TV boxes and sticks (most Fire TV Sticks, many Android TV boxes) |
+| `cloudstream-android-universal.apk` | any device; about twice the size. Use it when you're not sure |
+| `cloudstream-android-x86_64.apk`, `-x86.apk` | emulators and a few Chromebooks |
 
+If Android says "App not installed", the file doesn't match your device: try the universal one.
+Needs Android 6.0 or newer.
+
+### Phone or tablet
+
+1. Open the [Releases page](https://github.com/sherazi5110/cloudstream-linux/releases) on the phone and download the `.apk`.
+2. Open it from the notification or the **Downloads** app.
+3. When Android asks, allow **Install unknown apps** for your browser or file manager, go back and tap **Install**.
+4. Open **CloudStream**, go to **More → Extensions**, add a repository and install extensions.
+
+### Android TV, Google TV, Fire TV
+
+**With the Downloader app (easiest):**
+1. Install **Downloader** (by AFTVnews) from the TV's app store.
+2. Allow it to install apps:
+   - **Fire TV:** Settings → My Fire TV → Developer options → Install unknown apps → Downloader → On.
+     (If Developer options is missing: Settings → My Fire TV → About → click the device name 7 times.)
+   - **Android TV / Google TV:** Settings → Apps → Security & restrictions → Unknown sources → Downloader → On.
+3. In Downloader, enter the `.apk` link from the Releases page (right-click the file on a computer → *Copy link*),
+   or `https://github.com/sherazi5110/cloudstream-linux/releases/latest/download/cloudstream-android-armeabi-v7a.apk`,
+   and choose **Install**.
+
+**Other ways:** copy the `.apk` to a USB stick and open it with a file manager on the TV, or send it with the
+*Send files to TV* app.
+
+The app shows the TV layout automatically on TVs. If a box picks the wrong one, change it under
+**Settings → Appearance → Layout**.
+
+### From a computer (adb)
+
+With USB or network debugging turned on in the device's developer options:
+```bash
+adb install -r cloudstream-android-arm64-v8a.apk
+```
+
+### Update
+
+Download the new `.apk` and install it the same way; your extensions, profiles and history are kept.
+If Android refuses with "App not installed" or "package conflicts", the new file was signed with a different key:
+uninstall the old app first (this deletes its data), then install the new one.
+
+### Remove
+
+Settings → Apps → CloudStream → Uninstall (or long-press the icon → Uninstall).
