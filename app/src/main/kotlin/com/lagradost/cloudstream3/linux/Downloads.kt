@@ -99,6 +99,9 @@ object Downloads {
     /** This profile's downloads, newest first. */
     fun all(): List<Item> { ensureLoaded(); return items.values.filter { it.profile == Profiles.current.id }.sortedByDescending { it.created } }
 
+    /** Running or waiting downloads of every profile (they all keep going after a profile switch). */
+    fun active(): List<Item> { ensureLoaded(); return items.values.filter { it.state == State.RUNNING || it.state == State.QUEUED } }
+
     fun get(apiName: String, data: String): Item? { ensureLoaded(); return items[id(apiName, data)]?.takeIf { it.profile == Profiles.current.id } }
 
     /** The finished file for an episode, if it is downloaded and still on disk. */
@@ -459,7 +462,7 @@ object Downloads {
             if (o.has("season")) o.getInt("season") else null, if (o.has("episode")) o.getInt("episode") else null, s("episodeName"),
             s("file"), runCatching { State.valueOf(o.getString("state")) }.getOrDefault(State.PAUSED), o.optLong("bytes"), o.optLong("total"),
             o.optInt("segmentsDone"), o.optInt("segments"), s("error"), o.optLong("created"),
-            s("source"), h?.keySet()?.associateWith { h.getString(it) }.orEmpty(), o.optBoolean("hls"),
+            s("source"), h?.keys()?.asSequence()?.associateWith { h.getString(it) }.orEmpty(), o.optBoolean("hls"),
             subs?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty(), o.optBoolean("retried"),
         )
     }

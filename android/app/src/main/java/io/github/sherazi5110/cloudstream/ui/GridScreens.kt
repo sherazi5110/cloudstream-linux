@@ -181,14 +181,15 @@ fun LibraryScreen() {
     var tab by remember { mutableStateOf(0) }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            listOf("My list", "History").forEachIndexed { i, label ->
+            listOf("My list", "History", "Downloads").forEachIndexed { i, label ->
                 Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier
                     .card(RoundedCornerShape(50)) { tab = i }
                     .background(if (tab == i) Palette.accent else Palette.surfaceHigh, RoundedCornerShape(50))
                     .padding(horizontal = 16.dp, vertical = 8.dp))
             }
         }
-        if (tab == 0) {
+        if (tab == 2) DownloadsTab()
+        else if (tab == 0) {
             if (bookmarks.isEmpty()) EmptyState("Your list is empty", "Tap + My list on a title page to keep it here.", Modifier.fillMaxWidth())
             else LazyVerticalGrid(gridCells, contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

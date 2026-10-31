@@ -45,9 +45,12 @@ object App {
             PluginManager.bumpVersion()
         }
         StremioAddons.onChange { PluginManager.bumpVersion() }
+        Downloads.onChange { DownloadService.ensure(context) }
         scope.launch {
             val failures = PluginManager.loadAll()
             if (failures.isNotEmpty()) Log.w("plugins", "Failed: ${failures.keys}")
+            // Carry on with downloads that were running when the app closed.
+            runCatching { Downloads.init() }
         }
     }
 

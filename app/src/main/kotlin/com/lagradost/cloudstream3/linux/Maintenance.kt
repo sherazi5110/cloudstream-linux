@@ -13,10 +13,13 @@ import org.json.JSONObject
  */
 object SiteOverrides {
     private val prefs get() = Platform.context.getSharedPreferences("site_overrides", 0)
-    /** Each extension's own address, remembered before any override is applied. */
-    private val originals = mutableMapOf<String, String>()
+    /**
+     * Each loaded extension's own address, remembered before any override is applied. Kept per
+     * instance, so an updated (reloaded) extension's new address is picked up.
+     */
+    private val originals = java.util.Collections.synchronizedMap(java.util.WeakHashMap<MainAPI, String>())
 
-    fun original(api: MainAPI): String = originals.getOrPut(api.name) { api.mainUrl }
+    fun original(api: MainAPI): String = originals.getOrPut(api) { api.mainUrl }
 
     fun get(api: MainAPI): String? = prefs.getString(api.name, null)?.takeIf { it.isNotBlank() }
 

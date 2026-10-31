@@ -152,6 +152,8 @@ object Engine {
      * the deadline are kept, which is how the Android player behaves too.
      */
     fun links(api: MainAPI, data: String): Flow<LinkEvent> = channelFlow {
+        // A downloaded copy plays first (and works offline).
+        Downloads.localFile(api.name, data)?.let { send(LinkEvent.Link(OfflineApi.local(it))) }
         val job = launch(dispatcher) {
             var error: Throwable? = null
             val timeout = api.loadLinksTimeoutMs ?: (Settings.sourcesTimeoutSeconds * 1000L)
@@ -193,7 +195,8 @@ object Engine {
     /** Best first: closest to the preferred quality without exceeding it, then higher. */
     fun rank(links: List<ExtractorLink>): List<ExtractorLink> {
         val preferred = Settings.preferredQuality.takeIf { it > 0 } ?: Int.MAX_VALUE
-        return links.sortedWith(compareBy<ExtractorLink> { if (it.quality <= preferred) 0 else 1 }
+        return links.sortedWith(compareBy<ExtractorLink> { if (it.source == OfflineApi.SOURCE) 0 else 1 }
+            .thenBy { if (it.quality <= preferred) 0 else 1 }
             .thenByDescending { if (it.quality <= preferred) it.quality else -it.quality })
     }
 }

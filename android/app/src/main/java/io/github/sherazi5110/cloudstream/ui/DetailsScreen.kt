@@ -170,6 +170,17 @@ private fun Details(api: MainAPI, r: LoadResponse) {
                     runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
                 }
             }
+            playables.singleOrNull()?.takeIf { api !is io.github.sherazi5110.cloudstream.OfflineApi }?.let { only ->
+                val dv = DownloadsUi.version()
+                val item = remember(dv) { io.github.sherazi5110.cloudstream.Downloads.get(api.name, only.data) }
+                var dlMenu by remember { mutableStateOf(false) }
+                Box {
+                    ActionButton(DownloadsUi.icon(item), DownloadsUi.label(item), tint = if (item?.state == io.github.sherazi5110.cloudstream.Downloads.State.DONE) Palette.watched else Color.White) {
+                        if (item == null) DownloadsUi.start(context, api, r, only) else dlMenu = true
+                    }
+                    DownloadsUi.Menu(dlMenu, item) { dlMenu = false }
+                }
+            }
             ActionButton(Icons.Filled.Check, if (allWatched) "Watched" else "Mark as watched", tint = if (allWatched) Palette.watched else Color.White) {
                 if (allWatched) Library.markUnwatched(api.name, r.url, playables.map { it.data })
                 else Library.markWatched(api.name, r.url, r.name, r.posterUrl, playables.map { it.data to it.label })
@@ -391,6 +402,8 @@ private fun EpisodeCard(api: MainAPI, r: LoadResponse, ep: Playable, libraryVers
                 if (hide) Box(Modifier.fillMaxSize().background(Palette.surfaceHigh)) else
                 NetImage(ep.posterUrl ?: r.backgroundPosterUrl ?: r.posterUrl, Modifier.fillMaxSize(), r.posterHeaders)
                 if (watched) Icon(Icons.Filled.CheckCircle, "Watched", tint = Palette.watched, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp))
+                val dv = DownloadsUi.version()
+                DownloadsUi.Badge(remember(dv, ep) { io.github.sherazi5110.cloudstream.Downloads.get(api.name, ep.data) }, Modifier.align(Alignment.TopStart).padding(8.dp))
                 if (progress != null && progress.duration > 0 && !watched) ProgressLine((progress.position / progress.duration).toFloat(), Modifier.align(Alignment.BottomStart))
             }
             Column(Modifier.padding(12.dp).height(72.dp)) {
@@ -405,7 +418,15 @@ private fun EpisodeCard(api: MainAPI, r: LoadResponse, ep: Playable, libraryVers
 
 @Composable
 private fun EpisodeMenu(open: Boolean, api: MainAPI, r: LoadResponse, ep: Playable, watched: Boolean, onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val dv = DownloadsUi.version()
+    val item = remember(dv, ep) { io.github.sherazi5110.cloudstream.Downloads.get(api.name, ep.data) }
+    var dlMenu by remember { mutableStateOf(false) }
+    DownloadsUi.Menu(dlMenu, item) { dlMenu = false }
     DropdownMenu(open, onDismissRequest = onDismiss) {
+        if (api !is io.github.sherazi5110.cloudstream.OfflineApi) DropdownMenuItem(text = { Text(if (item == null) "Download" else DownloadsUi.label(item) + "…") },
+            leadingIcon = { Icon(DownloadsUi.icon(item), null) },
+            onClick = { onDismiss(); if (item == null) DownloadsUi.start(context, api, r, ep) else dlMenu = true })
         if (watched) DropdownMenuItem(text = { Text("Mark as not watched") }, leadingIcon = { Icon(Icons.Filled.Refresh, null) },
             onClick = { onDismiss(); Library.markUnwatched(api.name, r.url, listOf(ep.data)) })
         else DropdownMenuItem(text = { Text("Mark as watched") }, leadingIcon = { Icon(Icons.Filled.Check, null) },
@@ -439,6 +460,18 @@ private fun EpisodeRow(api: MainAPI, r: LoadResponse, ep: Playable, libraryVersi
                 (left ?: ep.description?.takeIf { it.isNotBlank() })?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
             if (watched) Icon(Icons.Filled.Check, "Watched", tint = Palette.watched, modifier = Modifier.padding(end = 8.dp))
+            if (api !is io.github.sherazi5110.cloudstream.OfflineApi) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val dv = DownloadsUi.version()
+                val item = remember(dv, ep) { io.github.sherazi5110.cloudstream.Downloads.get(api.name, ep.data) }
+                var dlMenu by remember { mutableStateOf(false) }
+                Box {
+                    if (item == null) Icon(DownloadsUi.icon(null), "Download", tint = Palette.muted,
+                        modifier = Modifier.size(40.dp).card(androidx.compose.foundation.shape.CircleShape) { DownloadsUi.start(context, api, r, ep) }.padding(9.dp))
+                    else DownloadsUi.Badge(item, Modifier.card(RoundedCornerShape(50)) { dlMenu = true })
+                    DownloadsUi.Menu(dlMenu, item) { dlMenu = false }
+                }
+            }
         }
         EpisodeMenu(menu, api, r, ep, watched) { menu = false }
     }
