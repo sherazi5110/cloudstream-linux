@@ -17,9 +17,13 @@ its UI and settings too busy, and prefer this app's player). The design below wa
 
 ## Decisions
 
-- New repository (suggested `sherazi5110/cloudstream-android`), app name "CloudStream" with the CS logo
-  (`packaging/linux/cloudstream-linux.svg`), application id `io.github.sherazi5110.cloudstream` (installs next to
-  the official app). GPL-3.0 like CloudStream.
+- **Same repository** (`sherazi5110/cloudstream-linux`), in its own folder **`android/`** (a separate Gradle build,
+  so the Linux build and CI are untouched). The `.apk` is built by a new job in `.github/workflows/build.yml` and
+  attached to the **same GitHub release** as the `.deb`, `.flatpak` and `.tar` (one tag, e.g. `V7.0.0`, ships all).
+  App name "CloudStream" with the CS logo (`packaging/linux/cloudstream-linux.svg`), application id
+  `io.github.sherazi5110.cloudstream` (installs next to the official app). GPL-3.0 like CloudStream.
+- Shared logic: start by copying the plain-Kotlin files into `android/` and adapting them; later, if both apps
+  stay in step, move them into a shared Gradle module used by both builds.
 - Kotlin + Jetpack Compose (phone) and Compose for TV (`androidx.tv`), one app with both layouts
   (`android.software.leanback` not required, `android.hardware.touchscreen` not required, TV banner 320×180,
   LEANBACK_LAUNCHER intent).
@@ -31,7 +35,8 @@ its UI and settings too busy, and prefer this app's player). The design below wa
   (history, mark watched), `Catalogs.kt`, `OnlineSubtitles.kt`, `StreamProxy.kt` (likely not needed with libVLC
   headers). Replace `Platform.context` prefs with Android SharedPreferences/DataStore.
 - Phases: (1) Home, Search, title page, VLC player, extensions, phone + TV; (2) profiles, My list, Live TV,
-  Stremio, TMDB, Settings, themes; (3) polish, `.apk` built by GitHub Actions and attached to releases.
+  Stremio, TMDB, Settings, themes; (3) polish, the `.apk` job in CI, signed release builds
+  (a release keystore kept as GitHub Actions secrets; never committed), README and INSTALL sections for Android.
 
 ## Environment
 
