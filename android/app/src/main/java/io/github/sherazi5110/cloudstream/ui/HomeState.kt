@@ -35,7 +35,7 @@ class HomeState {
     val featured: List<SearchResponse> get() = sections.firstOrNull()?.list?.list.orEmpty().take(6)
 
     fun choose(api: MainAPI) {
-        Settings.homeProvider = api.name
+        Settings.lastHomeProvider = api.name
         this.api = api
     }
 }
@@ -47,7 +47,7 @@ fun rememberHomeState(): HomeState {
     LaunchedEffect(version) {
         val list = Engine.providers().filter { it.hasMainPage }
         state.providers = list
-        val keep = state.api?.name ?: Settings.homeProvider
+        val keep = state.api?.name ?: Settings.lastHomeProvider
         state.api = list.firstOrNull { it.name == keep } ?: list.firstOrNull()
     }
     // Reload when the chosen extension changes (not on every extension that finishes loading).

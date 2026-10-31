@@ -14,7 +14,7 @@ import org.json.JSONArray
 object Catalogs {
     data class Entry(val index: Int, val section: MainPageData, val enabled: Boolean)
 
-    private val prefs: SharedPreferences get() = App.context.getSharedPreferences("home_catalogs", 0)
+    private val prefs: SharedPreferences get() = App.context.getSharedPreferences(Profiles.file("home_catalogs"), 0)
     private val listeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
 
     /** Returns a function that unregisters the listener. */

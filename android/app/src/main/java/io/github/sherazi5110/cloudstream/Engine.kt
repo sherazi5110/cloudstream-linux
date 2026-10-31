@@ -65,11 +65,11 @@ object Engine {
     private const val DEFAULT_TIMEOUT = 45_000L
 
     /** Sorted by name: extensions load in parallel, so registration order isn't stable. */
-    /** Extensions the user may see (NSFW ones only when allowed). */
+    /** Extensions and Stremio add-ons the current profile may use: a kids profile sees only its allowed ones. */
     fun providers(): List<MainAPI> = allProviders().filter { ContentFilter.allows(it) }
 
-    /** Every loaded extension. */
-    fun allProviders(): List<MainAPI> = APIHolder.allProviders.toList()
+    /** Every loaded extension and add-on, whatever the profile. */
+    fun allProviders(): List<MainAPI> = (APIHolder.allProviders.toList() + StremioAddons.apis())
         .sortedBy { it.name.lowercase() }
 
     fun provider(name: String): MainAPI? = providers().firstOrNull { it.name.equals(name, ignoreCase = true) }
