@@ -4,13 +4,17 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,11 +25,14 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,29 +40,41 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
+/**
+ * Wide layout (the Linux app's: icon rail on the left, top bar) on Android TV and whenever the screen is
+ * wider than tall (tablets and phones in landscape); the phone layout (bottom bar) in portrait.
+ */
+val LocalWide = compositionLocalOf { false }
+
+/** Also callable outside composition-aware code paths that already read it once. */
+val isWide: Boolean @Composable get() = LocalWide.current
+
 private fun Tab.icon(): ImageVector = when (this) {
     Tab.HOME -> Icons.Filled.Home
     Tab.SEARCH -> Icons.Filled.Search
     Tab.LIBRARY -> Icons.Filled.VideoLibrary
     Tab.EXTENSIONS -> Icons.Filled.Extension
-    Tab.MORE -> if (isTv) Icons.Filled.Settings else Icons.Filled.MoreHoriz
+    Tab.MORE -> Icons.Filled.MoreHoriz
 }
 
 @Composable
 fun AppRoot() {
     val top = Nav.top
     BackHandler(enabled = Nav.stack.isNotEmpty() || Nav.tab != Tab.HOME) { Nav.back() }
-    Box(Modifier.fillMaxSize().background(Palette.background)) {
-        if (top is Screen.Player) {
-            PlayerScreen(top)
-            return@Box
-        }
-        if (isTv) Row(Modifier.fillMaxSize()) {
-            Rail()
-            Box(Modifier.weight(1f).fillMaxHeight()) { Content(top) }
-        } else Column(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f)) { Content(top) }
-            if (top == null) BottomBar()
+    BoxWithConstraints(Modifier.fillMaxSize().background(Palette.background)) {
+        val wide = isTv || maxWidth > maxHeight
+        CompositionLocalProvider(LocalWide provides wide) {
+            if (top is Screen.Player) {
+                PlayerScreen(top)
+                return@CompositionLocalProvider
+            }
+            if (wide) Row(Modifier.fillMaxSize()) {
+                Rail()
+                Box(Modifier.weight(1f).fillMaxHeight()) { Content(top) }
+            } else Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f)) { Content(top) }
+                if (top == null) BottomBar()
+            }
         }
     }
 }
@@ -81,7 +100,31 @@ private fun Content(top: Screen?) {
     }
 }
 
-/** Phone: Home · Search · My list · More (Live TV joins in phase 2). */
+/**
+ * The wide layout's top bar: page controls on the left (Home's extension picker), Search on the right.
+ * Drawn over the page, so Home's banner reaches the top edge.
+ */
+@Composable
+fun TopBar(modifier: Modifier = Modifier, start: @Composable () -> Unit = {}) {
+    Row(
+        modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 24.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        start()
+        Spacer(Modifier.weight(1f))
+        Row(
+            Modifier.card(RoundedCornerShape(50)) { Nav.select(Tab.SEARCH) }
+                .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(50))
+                .padding(horizontal = 16.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Search, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Text("Search", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 8.dp))
+        }
+    }
+}
+
+/** Portrait: Home · Search · My list · More (Live TV joins in phase 2). */
 @Composable
 private fun BottomBar() {
     NavigationBar(containerColor = Palette.background.copy(alpha = 0.97f)) {
@@ -102,31 +145,31 @@ private fun BottomBar() {
     }
 }
 
-/** Android TV: the Linux app's icon rail. */
+/** Wide: the Linux app's icon rail. */
 @Composable
 private fun Rail() {
     Column(
-        Modifier.fillMaxHeight().width(84.dp).padding(vertical = 24.dp),
+        Modifier.fillMaxHeight().width(76.dp).background(Color(0xFF09090C)).systemBarsPadding().padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Logo(46.dp)
-        Spacer(Modifier.size(18.dp))
-        listOf(Tab.HOME, Tab.SEARCH, Tab.LIBRARY, Tab.EXTENSIONS).forEach { RailItem(it) }
+        Logo(42.dp)
+        Spacer(Modifier.size(14.dp))
+        listOf(Tab.HOME, Tab.SEARCH, Tab.LIBRARY, Tab.EXTENSIONS).forEach { RailItem(it, it.icon()) }
         Spacer(Modifier.weight(1f))
-        RailItem(Tab.MORE)
+        RailItem(Tab.MORE, Icons.Filled.Settings)
     }
 }
 
 @Composable
-private fun RailItem(tab: Tab) {
+private fun RailItem(tab: Tab, icon: ImageVector) {
     val selected = Nav.tab == tab && Nav.stack.isEmpty()
     val shape = RoundedCornerShape(14.dp)
     Box(
-        Modifier.size(52.dp).card(shape, focusScale = 1.1f) { Nav.select(tab) }
+        Modifier.size(48.dp).card(shape, focusScale = 1.1f) { Nav.select(tab) }
             .background(if (selected) Palette.accent.copy(alpha = 0.22f) else Color.Transparent, shape),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(tab.icon(), tab.label, tint = if (selected) Palette.accent else Palette.muted, modifier = Modifier.size(26.dp))
+        Icon(icon, tab.label, tint = if (selected) Palette.accent else Palette.muted, modifier = Modifier.size(24.dp))
     }
 }

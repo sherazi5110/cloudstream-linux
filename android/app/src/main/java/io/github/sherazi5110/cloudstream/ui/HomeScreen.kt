@@ -3,6 +3,7 @@ package io.github.sherazi5110.cloudstream.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -29,6 +31,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -51,7 +54,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.SearchResponse
@@ -65,7 +70,7 @@ fun HomeScreen() {
         NoExtensions()
         return
     }
-    if (isTv) TvHome(state) else PhoneHome(state)
+    if (isWide) WideHome(state) else PhoneHome(state)
 }
 
 @Composable
@@ -193,10 +198,11 @@ fun SourcePicker(state: HomeState, modifier: Modifier = Modifier) {
 
 @Composable
 fun ContinueRow(entries: List<WatchEntry>, cardWidth: androidx.compose.ui.unit.Dp, onFocus: ((WatchEntry) -> Unit)? = null) {
+    val edge = if (isWide) 40.dp else 16.dp
     Column(Modifier.padding(top = 12.dp)) {
-        SectionTitle("Continue Watching", Modifier.padding(horizontal = if (isTv) 0.dp else 16.dp))
+        SectionTitle("Continue Watching", Modifier.padding(horizontal = edge))
         LazyRow(
-            contentPadding = PaddingValues(horizontal = if (isTv) 4.dp else 16.dp, vertical = 10.dp),
+            contentPadding = PaddingValues(horizontal = edge, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(entries, key = { "${it.apiName}|${it.url}" }) { e ->
@@ -235,14 +241,15 @@ fun CatalogRow(
     posterWidth: androidx.compose.ui.unit.Dp,
     onFocus: ((SearchResponse) -> Unit)? = null,
 ) {
+    val edge = if (isWide) 40.dp else 16.dp
     Column(Modifier.padding(top = 12.dp)) {
         SectionTitle(
-            section.list.name, Modifier.padding(horizontal = if (isTv) 0.dp else 16.dp),
-            action = "See all",
+            section.list.name, Modifier.padding(horizontal = edge),
+            action = if (isWide) "View all" else "See all",
         ) { Nav.open(Screen.Catalog(section.api.name, section.section.name, section.list.name)) }
         LazyRow(
-            contentPadding = PaddingValues(horizontal = if (isTv) 4.dp else 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(if (isTv) 16.dp else 10.dp),
+            contentPadding = PaddingValues(horizontal = edge, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (isWide) 14.dp else 10.dp),
         ) {
             items(section.list.list, key = { it.url }) { item ->
                 PosterCard(item, posterWidth, onFocus = onFocus?.let { { it(item) } }) { openTitle(item) }
@@ -251,49 +258,101 @@ fun CatalogRow(
     }
 }
 
-// ---------------------------------------------------------------- TV
+// ---------------------------------------------------------------- wide (landscape, TV)
 
+/**
+ * The Linux app's Home: a full-width banner with the title on the left (extension, logo or name, facts,
+ * "#1 in …", plot, Play / More Info) and dots on the right, then Continue Watching and the catalogs.
+ * The banner slides by itself and can be swiped; on TV it follows the focused card.
+ */
 @Composable
-private fun TvHome(state: HomeState) {
+private fun WideHome(state: HomeState) {
     var focused by remember { mutableStateOf<SearchResponse?>(null) }
-    var focusedEntry by remember { mutableStateOf<WatchEntry?>(null) }
-    val shown = focused ?: state.featured.firstOrNull()
-    val details = rememberDetails(focusedEntry?.apiName ?: shown?.apiName, focusedEntry?.url ?: shown?.url)
-    val scope = rememberCoroutineScope()
-    val playFocus = remember { FocusRequester() }
-    val hasFeatured = shown != null
-    LaunchedEffect(hasFeatured) { if (hasFeatured) runCatching { playFocus.requestFocus() } }
-
-    Box(Modifier.fillMaxSize()) {
-        // The banner follows the focused title.
-        Box(Modifier.fillMaxWidth().height(460.dp)) {
-            NetImage(details?.backgroundPosterUrl ?: details?.posterUrl ?: focusedEntry?.posterUrl ?: shown?.posterUrl,
-                Modifier.fillMaxSize(), details?.posterHeaders ?: shown?.posterHeaders)
-            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Palette.background, 0.55f to Palette.background.copy(alpha = 0.3f), 1f to Color.Transparent)))
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Palette.background)))
-        }
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 48.dp, end = 32.dp, bottom = 32.dp)) {
-            item(key = "banner") {
-                Column(Modifier.padding(top = 28.dp).height(330.dp).fillMaxWidth(0.6f)) {
-                    SourcePicker(state)
-                    Spacer(Modifier.height(18.dp))
-                    Text(focusedEntry?.name ?: shown?.name.orEmpty(), style = MaterialTheme.typography.displayLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    MetaLine(shown, details, Modifier.padding(vertical = 8.dp))
-                    Text(details?.plot.orEmpty(), style = MaterialTheme.typography.bodyLarge, color = Palette.muted, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    val entry = focusedEntry
-                    if (shown != null || entry != null) Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        PillButton("Play", Icons.Filled.PlayArrow, Modifier.focusRequester(playFocus)) { if (entry != null) openTitle(entry) else Playback.playFrom(scope, shown!!) }
-                        PillButton("More Info", Icons.Filled.Info, primary = false) { if (entry != null) openTitle(entry) else openTitle(shown!!) }
-                    }
-                }
-            }
+    val list = rememberLazyListState()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val bannerHeight = (maxHeight * 0.74f).coerceIn(340.dp, 640.dp)
+        LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(bottom = 32.dp)) {
+            item(key = "banner") { WideBanner(state, focused, bannerHeight) }
             if (state.continueWatching.isNotEmpty()) item(key = "continue") {
-                ContinueRow(state.continueWatching, 260.dp) { focusedEntry = it; focused = null }
+                ContinueRow(state.continueWatching, 280.dp)
             }
             items(state.sections, key = { "${it.api.name}|${it.order}" }) { section ->
-                CatalogRow(section, 130.dp) { focused = it; focusedEntry = null }
+                CatalogRow(section, 140.dp, onFocus = if (isTv) { item -> focused = item } else null)
             }
             if (state.loading && state.sections.isEmpty()) item { Spinner(Modifier.fillMaxWidth().height(200.dp)) }
+        }
+        // Fixed top bar; it gets a backdrop once the banner has scrolled away.
+        val scrolled = list.firstVisibleItemIndex > 0
+        TopBar(
+            Modifier.background(if (scrolled) Palette.background.copy(alpha = 0.94f) else Color.Transparent),
+        ) { SourcePicker(state) }
+    }
+}
+
+@Composable
+private fun WideBanner(state: HomeState, focused: SearchResponse?, height: androidx.compose.ui.unit.Dp) {
+    val featured = state.featured
+    val pager = rememberPagerState { featured.size.coerceAtLeast(1) }
+    // Slides every 9 seconds (unless a card on TV holds the banner).
+    LaunchedEffect(featured.size, focused) {
+        while (featured.size > 1 && focused == null) {
+            delay(9_000)
+            pager.animateScrollToPage((pager.currentPage + 1) % featured.size)
+        }
+    }
+    val rowName = state.sections.firstOrNull()?.list?.name
+    Box(Modifier.fillMaxWidth().height(height)) {
+        if (featured.isEmpty()) Box(Modifier.fillMaxSize().background(Palette.surface))
+        else if (focused != null) BannerPage(focused, featured.indexOfFirst { it.url == focused.url }.takeIf { it >= 0 }, rowName)
+        else HorizontalPager(pager, Modifier.fillMaxSize()) { page -> BannerPage(featured[page], page, rowName) }
+        if (featured.size > 1 && focused == null) Row(
+            Modifier.align(Alignment.BottomEnd).padding(end = 40.dp, bottom = 28.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            repeat(featured.size) { i ->
+                val selected = pager.currentPage == i
+                Box(Modifier.size(width = if (selected) 22.dp else 7.dp, height = 7.dp)
+                    .background(if (selected) Palette.accent else Color.White.copy(alpha = 0.4f), CircleShape))
+            }
+        }
+    }
+}
+
+@Composable
+private fun BannerPage(item: SearchResponse, rank: Int?, rowName: String?) {
+    val details = rememberDetails(item.apiName, item.url)
+    val scope = rememberCoroutineScope()
+    val playFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { if (isTv && rank == 0) runCatching { playFocus.requestFocus() } }
+    Box(Modifier.fillMaxSize()) {
+        NetImage(details?.backgroundPosterUrl ?: details?.posterUrl ?: item.posterUrl, Modifier.fillMaxSize(),
+            details?.posterHeaders ?: item.posterHeaders)
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(
+            0f to Palette.background.copy(alpha = 0.95f), 0.45f to Palette.background.copy(alpha = 0.55f), 0.75f to Color.Transparent)))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(
+            0f to Color.Black.copy(alpha = 0.45f), 0.2f to Color.Transparent, 0.6f to Color.Transparent, 1f to Palette.background)))
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 40.dp, bottom = 28.dp).widthIn(max = 560.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Logo(18.dp)
+                Text(item.apiName.uppercase(), style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 8.dp))
+            }
+            val logo = details?.logoUrl
+            if (logo != null) NetImage(logo, Modifier.padding(vertical = 12.dp).height(96.dp).widthIn(max = 460.dp).fillMaxWidth(),
+                contentScale = ContentScale.Fit, alignment = Alignment.CenterStart, placeholder = false)
+            else Text(item.name, style = MaterialTheme.typography.displayLarge, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(vertical = 10.dp))
+            MetaLine(item, details)
+            if (rank != null && rowName != null) Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Tv, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Text("#${rank + 1} in $rowName", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
+            }
+            details?.plot?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp))
+            }
+            Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                PillButton("Play", Icons.Filled.PlayArrow, Modifier.focusRequester(playFocus), compact = true) { Playback.playFrom(scope, item) }
+                PillButton("More Info", Icons.Filled.Info, primary = false, compact = true) { openTitle(item) }
+            }
         }
     }
 }

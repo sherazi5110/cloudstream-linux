@@ -66,7 +66,7 @@ fun BackBar(title: String, modifier: Modifier = Modifier) {
     }
 }
 
-private val gridCells get() = if (isTv) GridCells.Adaptive(140.dp) else GridCells.Adaptive(108.dp)
+private val gridCells @Composable get() = if (isWide) GridCells.Adaptive(140.dp) else GridCells.Adaptive(108.dp)
 
 /** "See all": a catalog's pages, loading the next one near the bottom until the extension says there are no more. */
 @Composable
@@ -149,7 +149,7 @@ fun SearchScreen() {
                     Column(Modifier.padding(top = 8.dp)) {
                         SectionTitle("${api.name} · ${list.size}", Modifier.padding(horizontal = 16.dp))
                         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(list, key = { it.url }) { item -> PosterCard(item, if (isTv) 130.dp else 112.dp) { openTitle(item) } }
+                            items(list, key = { it.url }) { item -> PosterCard(item, if (isWide) 140.dp else 112.dp) { openTitle(item) } }
                         }
                     }
                 }
@@ -184,7 +184,7 @@ fun LibraryScreen() {
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(bookmarks, key = { "${it.apiName}|${it.url}" }) { b ->
                     Column {
-                        Box(Modifier.fillMaxWidth().height(if (isTv) 210.dp else 160.dp).card { Nav.open(Screen.Details(b.apiName, b.url, b.name, b.posterUrl)) }) {
+                        Box(Modifier.fillMaxWidth().height(if (isWide) 210.dp else 160.dp).card { Nav.open(Screen.Details(b.apiName, b.url, b.name, b.posterUrl)) }) {
                             NetImage(b.posterUrl, Modifier.fillMaxSize())
                         }
                         Text(b.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, modifier = Modifier.padding(top = 6.dp))
@@ -193,7 +193,7 @@ fun LibraryScreen() {
             }
         } else {
             if (history.isEmpty()) EmptyState("No history yet", "Titles you watch appear here.", Modifier.fillMaxWidth())
-            else LazyVerticalGrid(if (isTv) GridCells.Adaptive(260.dp) else GridCells.Adaptive(170.dp), contentPadding = PaddingValues(16.dp),
+            else LazyVerticalGrid(if (isWide) GridCells.Adaptive(260.dp) else GridCells.Adaptive(170.dp), contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(history, key = { "${it.apiName}|${it.url}" }) { e ->
                     var menu by remember { mutableStateOf(false) }

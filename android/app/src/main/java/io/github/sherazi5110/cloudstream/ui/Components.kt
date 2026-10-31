@@ -95,10 +95,13 @@ fun NetImage(
     modifier: Modifier = Modifier,
     headers: Map<String, String>? = null,
     contentScale: ContentScale = ContentScale.Crop,
+    alignment: Alignment = Alignment.Center,
+    /** A grey box behind the image (posters); off for logos drawn over artwork. */
+    placeholder: Boolean = true,
 ) {
     val context = LocalContext.current
     if (url.isNullOrBlank()) {
-        Box(modifier.background(Palette.surfaceHigh))
+        if (placeholder) Box(modifier.background(Palette.surfaceHigh))
         return
     }
     val request = remember(url, headers) {
@@ -106,7 +109,8 @@ fun NetImage(
             if (!headers.isNullOrEmpty()) httpHeaders(NetworkHeaders.Builder().apply { headers.forEach { (k, v) -> set(k, v) } }.build())
         }.build()
     }
-    AsyncImage(model = request, contentDescription = null, modifier = modifier.background(Palette.surfaceHigh), contentScale = contentScale)
+    AsyncImage(model = request, contentDescription = null, contentScale = contentScale, alignment = alignment,
+        modifier = if (placeholder) modifier.background(Palette.surfaceHigh) else modifier)
 }
 
 @Composable
@@ -212,6 +216,7 @@ fun PillButton(
     icon: ImageVector?,
     modifier: Modifier = Modifier,
     primary: Boolean = true,
+    compact: Boolean = false,
     onClick: () -> Unit,
 ) {
     val shape = RoundedCornerShape(50)
@@ -219,7 +224,7 @@ fun PillButton(
         modifier
             .card(shape = shape, focusScale = 1.04f, onClick = onClick)
             .background(if (primary) Palette.accent else Color.White.copy(alpha = 0.16f), shape)
-            .padding(horizontal = 22.dp, vertical = 12.dp),
+            .padding(horizontal = if (compact) 18.dp else 22.dp, vertical = if (compact) 9.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
