@@ -212,6 +212,42 @@ object Metadata {
         return null
     }
 
+    // ---------- choosing the match by hand ("Wrong match?") ----------
+
+    data class Candidate(val id: Int, val mediaType: String, val title: String, val year: Int?, val poster: String?, val overview: String?)
+
+    /** Films and series on TMDB for [query] ("Title 2019" narrows by year), best first. */
+    suspend fun searchCandidates(query: String): List<Candidate> = withContext(Dispatchers.IO) {
+        if (!hasTmdb) return@withContext emptyList()
+        val (title, year) = cleanTitle(query)
+        val params = mutableMapOf("query" to title, "language" to language, "include_adult" to "false")
+        val results = tmdb("/search/multi", params)?.optJSONArray("results") ?: return@withContext emptyList()
+        (0 until results.length()).mapNotNull { results.optJSONObject(it) }
+            .filter { it.optString("media_type") in setOf("movie", "tv") }
+            .map {
+                Candidate(it.optInt("id"), it.optString("media_type"), it.optString("title").ifBlank { it.optString("name") },
+                    (it.optString("release_date").ifBlank { it.optString("first_air_date") }).take(4).toIntOrNull(),
+                    image(it.optString("poster_path"), "w185"), it.optString("overview").ifBlank { null })
+            }
+            .sortedByDescending { if (year != null && it.year != null && kotlin.math.abs(it.year - year) <= 1) 1 else 0 }
+    }
+
+    private fun matchKey(apiName: String, url: String) = "match:" + cacheKey(apiName, url)
+
+    /** The TMDB entry chosen by hand for a title: ("movie"|"tv", id), (null, 0) for "no match", or null for automatic. */
+    fun chosenMatch(apiName: String, url: String): Pair<String?, Int>? {
+        val v = prefs.getString(matchKey(apiName, url), null)?.takeIf { it.isNotBlank() } ?: return null
+        if (v == "none") return null to 0
+        val (type, id) = v.split(':').let { it[0] to (it.getOrNull(1)?.toIntOrNull() ?: return null) }
+        return type to id
+    }
+
+    /** Pins [c] as the match for a title; null c = "don't use TMDB for it"; [automatic] = forget the choice. */
+    fun chooseMatch(apiName: String, url: String, c: Candidate?, automatic: Boolean = false) {
+        prefs.edit().putString(matchKey(apiName, url), if (automatic) "" else c?.let { "${it.mediaType}:${it.id}" } ?: "none").apply()
+        changed()
+    }
+
     // ---------- ratings on posters ----------
 
     /** A short score for a poster card ("TMDB 7.9" / "AniList 8.4"), or null. Cached; at most 4 lookups at once. */
@@ -220,7 +256,12 @@ object Metadata {
         val (title, year) = cleanTitle(item.name)
         val y = year ?: (item as? com.lagradost.cloudstream3.MovieSearchResponse)?.year ?: (item as? com.lagradost.cloudstream3.TvSeriesSearchResponse)?.year
         if (hasTmdb) {
-            val hit = cached(cacheKey("search", title, y, kindOf(item.type), language)) { searchTmdb(title, y, kindOf(item.type)) }
+            val chosen = chosenMatch(item.apiName, item.url)
+            if (chosen?.first != null) {
+                val full = cached(cacheKey("vote", chosen.first, chosen.second)) { tmdb("/${chosen.first}/${chosen.second}", mapOf("language" to language)) }
+                full?.optDouble("vote_average")?.takeIf { it > 0 }?.let { return "TMDB %.1f".format(it) }
+            }
+            val hit = if (chosen != null) null else cached(cacheKey("search", title, y, kindOf(item.type), language)) { searchTmdb(title, y, kindOf(item.type)) }
             hit?.optDouble("vote_average")?.takeIf { it > 0 && hit.optInt("vote_count") >= 3 }?.let { return "TMDB %.1f".format(it) }
         }
         if (anilist && isAnime(item.type)) {
@@ -239,8 +280,14 @@ object Metadata {
         var info = Info(title = title, imdbId = imdb)
 
         if (hasTmdb && (artwork || extras || posterRatings)) {
-            val hit = imdb?.let { id -> cached(cacheKey("find", id, language)) { findByImdb(id) } }
-                ?: cached(cacheKey("search", title, year, kindOf(r.type), language)) { searchTmdb(title, year, kindOf(r.type)) }
+            // A match chosen by hand ("Wrong match?") wins; "no match" skips TMDB for this title.
+            val chosen = chosenMatch(r.apiName, r.url)
+            val hit = when {
+                chosen != null && chosen.first == null -> null
+                chosen != null -> JSONObject().put("id", chosen.second).put("media_type", chosen.first)
+                else -> imdb?.let { id -> cached(cacheKey("find", id, language)) { findByImdb(id) } }
+                    ?: cached(cacheKey("search", title, year, kindOf(r.type), language)) { searchTmdb(title, year, kindOf(r.type)) }
+            }
             if (hit != null) {
                 val type = hit.optString("media_type").ifBlank { kindOf(r.type) ?: "movie" }
                 val id = hit.optInt("id")
@@ -251,6 +298,7 @@ object Metadata {
                         "include_image_language" to "${language.take(2)},en,null",
                     ))
                 } ?: hit
+                if (chosen != null) imdb = null // the extension's id may be what was wrong
                 imdb = imdb ?: full.optJSONObject("external_ids")?.optString("imdb_id")?.takeIf { it.startsWith("tt") } ?: full.optString("imdb_id").takeIf { it.startsWith("tt") }
                 val logos = full.optJSONObject("images")?.optJSONArray("logos")
                 val logo = logos?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) }

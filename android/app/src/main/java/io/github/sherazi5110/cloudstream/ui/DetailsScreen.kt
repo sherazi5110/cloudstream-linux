@@ -133,7 +133,10 @@ private fun Details(api: MainAPI, r: LoadResponse) {
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { if (isTv) runCatching { playFocus.requestFocus() } }
     val meta = io.github.sherazi5110.cloudstream.Metadata
-    val info = rememberMetadata(r)
+    var matchVersion by remember { mutableIntStateOf(0) }
+    var matching by remember { mutableStateOf(false) }
+    if (matching) MatchDialog(r, onClose = { matching = false }, onChanged = { matchVersion++ })
+    val info = rememberMetadata(r, matchVersion)
     val art = meta.artwork
     val extras = meta.extras
     val backdrop = (if (art) info?.backdrop else null) ?: r.backgroundPosterUrl ?: r.posterUrl
@@ -151,6 +154,9 @@ private fun Details(api: MainAPI, r: LoadResponse) {
             (r.contentRating?.takeIf { it.isNotBlank() } ?: info?.contentRating)?.let { Tag(it) }
             if (isSeries) Tag("${playables.size} episodes")
             else r.duration?.takeIf { it > 0 }?.let { Tag(formatMinutes(it)) }
+            if (meta.hasTmdb) Text(if (info?.tmdbId != null) "Wrong match?" else "Find on TMDB", color = Palette.muted,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.card(RoundedCornerShape(6.dp), focusScale = 1.05f) { matching = true }.padding(horizontal = 6.dp, vertical = 3.dp))
         }
     }
     val actions: @Composable () -> Unit = {

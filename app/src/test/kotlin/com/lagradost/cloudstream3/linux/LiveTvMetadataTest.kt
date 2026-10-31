@@ -195,6 +195,15 @@ class LiveTvMetadataTest {
         assertEquals("TV-14", Metadata.details(series)!!.contentRating)
         assertEquals("TMDB 7.9", Metadata.posterRating(demo.newMovieSearchResponse("Night of the Test Pattern (1968) 1080p WEB-DL", "u", TvType.Movie)))
         assertNull(Metadata.posterRating(demo.newMovieSearchResponse("Something Else Entirely", "u2", TvType.Movie)))
+        // "Wrong match?": pick another TMDB entry by hand, then "no match", then back to automatic.
+        val candidates = Metadata.searchCandidates("Pixel")
+        assertEquals(listOf("Pixel City"), candidates.map { it.title })
+        Metadata.chooseMatch(film.apiName, film.url, candidates.single())
+        assertEquals(601, Metadata.details(film)!!.tmdbId)
+        Metadata.chooseMatch(film.apiName, film.url, null)
+        assertNull(Metadata.details(film)?.tmdbId)
+        Metadata.chooseMatch(film.apiName, film.url, null, automatic = true)
+        assertEquals(501, Metadata.details(film)!!.tmdbId)
         // AniList for anime when TMDB has nothing.
         Metadata.tmdbKey = ""
         assertEquals("AniList 8.4", Metadata.posterRating(demo.newMovieSearchResponse("Pixel Anime", "u3", TvType.Anime)))
