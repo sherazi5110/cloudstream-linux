@@ -752,3 +752,56 @@
 .popover-tune .icon { -fx-background-color: -cs-muted; }
 .popover-tune:hover { -fx-background-color: -cs-surface-3; }
 .popover-tune:hover .icon { -fx-background-color: -cs-accent; }
+/* ---------- 7.0: skip intro, next-episode countdown ---------- */
+.player-skip {
+    -fx-background-color: rgba(20,20,26,0.82); -fx-text-fill: white; -fx-font-size: 15px; -fx-font-weight: bold;
+    -fx-background-radius: 10; -fx-border-color: rgba(255,255,255,0.55); -fx-border-radius: 10; -fx-padding: 12 22 12 18; -fx-cursor: hand;
+}
+.player-skip .icon { -fx-background-color: white; }
+.player-skip:hover { -fx-background-color: -cs-accent; -fx-border-color: -cs-accent; }
+.player-next {
+    -fx-background-color: rgba(16,16,22,0.92); -fx-background-radius: 14; -fx-border-color: rgba(255,255,255,0.18);
+    -fx-border-radius: 14; -fx-padding: 16 18 16 18; -fx-min-width: 280;
+}
+.player-next-label { -fx-text-fill: -cs-accent; -fx-font-size: 11px; -fx-font-weight: bold; }
+.player-next-title { -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; }
+.player-next-count { -fx-text-fill: rgba(255,255,255,0.75); -fx-font-size: 13px; }
+
+/* ---------- Live TV guide grid ---------- */
+.guide { -fx-background-color: -cs-surface; -fx-background-radius: 14; -fx-border-color: -cs-line; -fx-border-radius: 14; }
+.guide-corner, .guide-ruler { -fx-background-color: -cs-surface-2; }
+.guide-corner { -fx-background-radius: 14 0 0 0; }
+.guide-ruler { -fx-background-radius: 0 14 0 0; }
+.guide-hour { -fx-text-fill: -cs-text; -fx-font-weight: bold; -fx-font-size: 12px; }
+.guide-half { -fx-text-fill: -cs-faint; -fx-font-size: 12px; }
+.guide-tick { -fx-background-color: -cs-line; }
+.guide-jump { -fx-background-color: -cs-accent-soft; -fx-text-fill: -cs-text; -fx-background-radius: 999; -fx-padding: 4 12 4 12; -fx-font-size: 12px; -fx-cursor: hand; }
+.guide-jump:hover { -fx-background-color: -cs-accent; }
+.guide-name { -fx-background-color: -cs-surface; -fx-border-color: transparent -cs-line -cs-line transparent; -fx-cursor: hand; }
+.guide-name.odd, .guide-row.odd { -fx-background-color: derive(-cs-surface, 4%); }
+.guide-name:hover { -fx-background-color: -cs-surface-3; }
+.guide-row { -fx-border-color: transparent transparent -cs-line transparent; }
+.guide-number { -fx-text-fill: -cs-faint; -fx-font-size: 11px; -fx-min-width: 26; }
+.guide-channel { -fx-text-fill: -cs-text; -fx-font-weight: bold; }
+.guide-scroll, .guide-scroll > .viewport { -fx-background-color: transparent; -fx-background: transparent; }
+.guide-prog { -fx-background-color: -cs-surface-2; -fx-background-radius: 8; -fx-cursor: hand; }
+.guide-prog:hover { -fx-background-color: -cs-surface-3; }
+.guide-prog.now { -fx-background-color: -cs-accent-soft; -fx-border-color: -cs-accent; -fx-border-width: 0 0 0 3; -fx-border-radius: 8; }
+.guide-prog.past .guide-title { -fx-text-fill: -cs-muted; }
+.guide-prog.empty { -fx-background-color: transparent; -fx-border-color: -cs-line; -fx-border-style: dashed; -fx-border-radius: 8; }
+.guide-prog.empty .guide-title { -fx-text-fill: -cs-faint; -fx-font-weight: normal; }
+.guide-title { -fx-text-fill: -cs-text; -fx-font-weight: bold; -fx-text-overrun: ellipsis; }
+.guide-time { -fx-text-fill: -cs-muted; -fx-font-size: 11px; }
+.guide-now { -fx-background-color: -cs-accent; }
+
+/* ---------- downloads ---------- */
+.dl-badge { -fx-background-color: rgba(0, 0, 0, 0.6); -fx-background-radius: 999; -fx-padding: 6; -fx-cursor: hand; -fx-spacing: 4; }
+.dl-badge .icon { -fx-background-color: white; }
+.dl-badge.idle { -fx-opacity: 0.0; }
+.episode-card:hover .dl-badge.idle { -fx-opacity: 1.0; }
+.dl-badge:hover { -fx-background-color: -cs-accent; }
+.dl-badge.busy { -fx-background-color: -cs-accent; -fx-padding: 5 10 5 8; }
+.dl-badge.done { -fx-background-color: -cs-good; }
+.dl-badge.failed { -fx-background-color: -cs-bad; }
+.dl-badge-text { -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; }
+.bad { -fx-text-fill: -cs-bad; }

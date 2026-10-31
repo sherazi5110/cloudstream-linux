@@ -5,6 +5,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.newMovieSearchResponse
+import com.lagradost.cloudstream3.newAnimeLoadResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -42,6 +43,7 @@ class LiveTvMetadataTest {
         System.setProperty("cs.tmdb.base", "$base/tmdb/3")
         System.setProperty("cs.tmdb.images", "$base/tmdbimg/")
         System.setProperty("cs.anilist", "$base/anilist")
+        System.setProperty("cs.aniskip", "$base/aniskip")
     }
 
     @AfterTest
@@ -72,6 +74,13 @@ class LiveTvMetadataTest {
         assertNotNull(now); assertNotNull(next)
         assertTrue(now.start <= System.currentTimeMillis() && System.currentTimeMillis() < now.stop)
         assertTrue(now.title.startsWith("News 24 show"))
+        // The guide grid: six half-hour programmes, in order, inside the window asked for.
+        val t = System.currentTimeMillis()
+        val grid = LiveTv.programmes(channels[0], t - 3600_000L, t + 6 * 3600_000L)
+        assertEquals(6, grid.size)
+        assertEquals(grid.sortedBy { it.start }, grid)
+        assertTrue(LiveTv.hasGuide())
+        assertEquals(1, LiveTv.programmes(channels[0], now.start, now.stop).size)
 
         assertTrue(LiveTv.toggleFavourite(channels[2]))
         assertEquals(setOf(channels[2].key), LiveTv.favourites())
@@ -195,6 +204,21 @@ class LiveTvMetadataTest {
         assertEquals("TV-14", Metadata.details(series)!!.contentRating)
         assertEquals("TMDB 7.9", Metadata.posterRating(demo.newMovieSearchResponse("Night of the Test Pattern (1968) 1080p WEB-DL", "u", TvType.Movie)))
         assertNull(Metadata.posterRating(demo.newMovieSearchResponse("Something Else Entirely", "u2", TvType.Movie)))
+        // "Wrong match?": pick another TMDB entry by hand, then "no match", then back to automatic.
+        val candidates = Metadata.searchCandidates("Pixel")
+        assertEquals(listOf("Pixel City"), candidates.map { it.title })
+        Metadata.chooseMatch(film.apiName, film.url, candidates.single())
+        assertEquals(601, Metadata.details(film)!!.tmdbId)
+        Metadata.chooseMatch(film.apiName, film.url, null)
+        assertNull(Metadata.details(film)?.tmdbId)
+        Metadata.chooseMatch(film.apiName, film.url, null, automatic = true)
+        assertEquals(501, Metadata.details(film)!!.tmdbId)
+        // Skip intro: the MyAnimeList id comes from AniList, the times from AniSkip.
+        val anime = demo.newAnimeLoadResponse("Pixel Anime", "$base/anime/pixel", TvType.Anime) {}
+        val segs = SkipTimes.forEpisode(anime, 1, 1_420_000)
+        assertEquals(listOf(SkipTimes.Kind.INTRO, SkipTimes.Kind.CREDITS), segs.map { it.kind })
+        assertEquals(5500L to 95_000L, segs[0].start to segs[0].end)
+        assertTrue(SkipTimes.forEpisode(film, 1, 1_000_000).isEmpty(), "only anime")
         // AniList for anime when TMDB has nothing.
         Metadata.tmdbKey = ""
         assertEquals("AniList 8.4", Metadata.posterRating(demo.newMovieSearchResponse("Pixel Anime", "u3", TvType.Anime)))

@@ -17,6 +17,9 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkPlayList
 import com.lagradost.cloudstream3.utils.Qualities
 import javafx.animation.PauseTransition
+import com.lagradost.cloudstream3.linux.SkipTimes
+import javafx.animation.KeyFrame
+import javafx.animation.Timeline
 import javafx.application.Platform
 import javafx.geometry.Pos
 import javafx.scene.Cursor
@@ -95,6 +98,13 @@ class BuiltinPlayer(
     private var onlineJob: Job? = null
     private var onlineResults: List<OnlineSubtitles.Result>? = null
     private var onlineError: String? = null
+    /** Intro/recap/credits times (anime, from AniSkip) and the next-episode countdown. */
+    private var segments: List<SkipTimes.Segment> = emptyList()
+    private var segmentsRequested = false
+    private val autoSkipped = mutableSetOf<SkipTimes.Segment>()
+    private var countdownCancelled = false
+    private var countdown: Timeline? = null
+    private var countdownLeft = 0
 
     // ----- controls -----
     private val spinner = ProgressIndicator().apply { setMaxSize(54.0, 54.0); isMouseTransparent = true }
@@ -121,6 +131,15 @@ class BuiltinPlayer(
     private val menu = PlayerMenu()
     private val hideTimer = PauseTransition(Duration.seconds(2.8)).apply { setOnFinished { hideControls() } }
     private var controlsVisible = true
+    private val skipButton = button("Skip intro", Icons.SKIP_NEXT, "player-skip") { skipSegment() }.apply { isVisible = false }
+    private val nextTitle = label("", "player-next-title")
+    private val nextCount = label("", "player-next-count")
+    private val nextCard = vbox(10.0,
+        label("NEXT EPISODE", "player-next-label"), nextTitle, nextCount,
+        hbox(8.0,
+            button("Play now", Icons.PLAY, "btn-accent", "btn-small") { playNext() },
+            button("Cancel", null, "btn-ghost", "btn-small") { cancelCountdown() }),
+    ).apply { styleClass += "player-next"; isVisible = false; maxWidth = Region.USE_PREF_SIZE; maxHeight = Region.USE_PREF_SIZE }
 
     init {
         styleClass += "builtin-player"
@@ -157,8 +176,12 @@ class BuiltinPlayer(
         bottom = VBox(6.0, seek, hbox(8.0, left, spacer(), right)).apply { styleClass += "player-bottom" }
 
         val chrome = VBox(top, spacer(), bottom).apply { isPickOnBounds = false }
-        children.addAll(video, spinner, osd, chrome, menu)
+        children.addAll(video, spinner, osd, chrome, skipButton, nextCard, menu)
         StackPane.setAlignment(osd, Pos.TOP_CENTER)
+        StackPane.setAlignment(skipButton, Pos.BOTTOM_RIGHT)
+        StackPane.setMargin(skipButton, javafx.geometry.Insets(0.0, 36.0, 120.0, 0.0))
+        StackPane.setAlignment(nextCard, Pos.BOTTOM_RIGHT)
+        StackPane.setMargin(nextCard, javafx.geometry.Insets(0.0, 36.0, 120.0, 0.0))
         StackPane.setAlignment(menu, Pos.BOTTOM_RIGHT)
         menu.isVisible = false
 
@@ -298,11 +321,14 @@ class BuiltinPlayer(
             updateClock()
             if (duration > 0 && abs(newTime - saved) >= 10_000) { saved = newTime; record() }
             if (newTime > 0) spinner.isVisible = false
+            updateSkip(newTime)
+            updateCountdown(newTime)
         }
 
         override fun lengthChanged(mediaPlayer: MediaPlayer, newLength: Long) = fx {
             duration = newLength
             durationLabel.text = format(newLength)
+            loadSegments()
         }
 
         override fun seekableChanged(mediaPlayer: MediaPlayer, newSeekable: Int) = fx {
@@ -371,7 +397,7 @@ class BuiltinPlayer(
         flash(if (ms > 0) "+${ms / 1000} s" else "−${-ms / 1000} s")
     }
 
-    private fun seekTo(ms: Long) {
+    internal fun seekTo(ms: Long) {
         if (!player.status().isSeekable) { pendingSeek = ms; return }
         player.controls().setTime(ms)
         position = ms
@@ -414,7 +440,74 @@ class BuiltinPlayer(
         }
     }
 
+    // ---------- skip intro and the next-episode countdown ----------
+
+    private fun loadSegments() {
+        if (segmentsRequested || duration <= 0 || !(Settings.skipButtons || Settings.autoSkip) || !SkipTimes.applies(response)) return
+        segmentsRequested = true
+        ui.launch { segments = SkipTimes.forEpisode(response, playable.episode, duration) }
+    }
+
+    /** The intro/recap (or credits, when no countdown will follow) being played now. */
+    private fun segmentAt(t: Long): SkipTimes.Segment? = segments.firstOrNull { s ->
+        t >= s.start && t < s.end - 1500 && (s.kind != SkipTimes.Kind.CREDITS || next == null || !Settings.autoPlayNext)
+    }
+
+    private fun updateSkip(t: Long) {
+        val s = segmentAt(t)
+        if (s != null && Settings.autoSkip && s.kind != SkipTimes.Kind.CREDITS && autoSkipped.add(s)) {
+            seekTo(s.end)
+            flash("Skipped ${if (s.kind == SkipTimes.Kind.RECAP) "recap" else "intro"}")
+            return
+        }
+        skipButton.isVisible = s != null && Settings.skipButtons && !nextCard.isVisible
+        s?.let { skipButton.text = it.kind.label }
+    }
+
+    private fun skipSegment() {
+        val s = segmentAt(position) ?: return
+        skipButton.isVisible = false
+        if (s.end >= duration - 2000 && next != null) playNext() else seekTo(s.end)
+    }
+
+    /** At the credits (from AniSkip), or 20 s before the end: "Next episode in 10…", then plays it. */
+    private fun updateCountdown(t: Long) {
+        val n = next ?: return
+        if (!Settings.autoPlayNext || duration < (System.getProperty("cs.countdown.min")?.toLongOrNull() ?: (5 * 60_000L))) return
+        val credits = segments.firstOrNull { it.kind == SkipTimes.Kind.CREDITS && it.start > duration / 2 && it.start < duration - 5000 }?.start
+        val startAt = credits ?: (duration - 20_000)
+        if (t < startAt - 1000) {
+            // Seeking back before the credits resets it.
+            if (countdown != null || nextCard.isVisible) stopCountdown()
+            countdownCancelled = false
+            return
+        }
+        if (countdownCancelled || countdown != null) return
+        nextTitle.text = n.label
+        countdownLeft = 10
+        nextCount.text = "Starts in $countdownLeft s"
+        nextCard.isVisible = true
+        skipButton.isVisible = false
+        countdown = Timeline(KeyFrame(Duration.seconds(1.0), {
+            countdownLeft--
+            nextCount.text = "Starts in $countdownLeft s"
+            if (countdownLeft <= 0) { stopCountdown(); playNext() }
+        })).apply { cycleCount = 10; play() }
+    }
+
+    private fun stopCountdown() {
+        countdown?.stop()
+        countdown = null
+        nextCard.isVisible = false
+    }
+
+    private fun cancelCountdown() {
+        countdownCancelled = true
+        stopCountdown()
+    }
+
     private fun playNext() {
+        stopCountdown()
         val n = next ?: return
         quit { Playback.open(api, response, n) }
     }

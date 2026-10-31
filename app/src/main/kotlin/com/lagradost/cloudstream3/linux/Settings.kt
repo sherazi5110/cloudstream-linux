@@ -25,7 +25,7 @@ object Settings {
     val profilePrefs: SharedPreferences get() = Platform.context.getSharedPreferences(Profiles.file("profile_settings"), 0)
 
     private val PROFILE_KEYS = setOf(
-        "auto_play_next", "subtitle_language", "preferred_quality", "player_volume", "hero_slider", "anti_spoiler",
+        "auto_play_next", "skip_buttons", "auto_skip", "subtitle_language", "preferred_quality", "player_volume", "hero_slider", "anti_spoiler",
         "player_equalizer", "audio_language", "subtitle_size", "subtitle_color", "subtitle_outline", "subtitle_background",
         "player_zoom", "last_home_provider", "show_nsfw",
         "theme_mode", "theme_accent", "theme_wallpaper", "theme_wallpaper_dim", "theme_wallpaper_blur",
@@ -54,6 +54,16 @@ object Settings {
     var autoPlayNext: Boolean
         get() = string("auto_play_next", "true").toBoolean()
         set(v) = put("auto_play_next", v)
+
+    /** Anime: show "Skip intro" / "Skip credits" buttons (times from AniSkip). */
+    var skipButtons: Boolean
+        get() = string("skip_buttons", "true").toBoolean()
+        set(v) = put("skip_buttons", v)
+
+    /** Anime: skip intros and recaps without asking. */
+    var autoSkip: Boolean
+        get() = string("auto_skip", "false").toBoolean()
+        set(v) = put("auto_skip", v)
 
     /** Subtitle languages to turn on automatically, e.g. "en" or "ar,en"; empty = off by default. */
     var subtitleLanguage: String
@@ -144,6 +154,11 @@ object Settings {
     var showNsfw: Boolean
         get() = string("show_nsfw", "false") == "true"
         set(v) = put("show_nsfw", v)
+
+    /** Where downloads go; blank = ~/Downloads/CloudStream. */
+    var downloadFolder: String
+        get() = string("download_folder", "")
+        set(v) = put("download_folder", v)
 
     var lastHomeProvider: String?
         get() = string("last_home_provider", "").ifBlank { null }

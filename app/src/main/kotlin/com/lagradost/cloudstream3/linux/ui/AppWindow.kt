@@ -40,7 +40,7 @@ import kotlin.system.exitProcess
 
 object AppInfo {
     const val NAME = "CloudStream for Linux"
-    const val VERSION = "6.0.1"
+    const val VERSION = "7.0.0"
     const val CREDIT = "Tennant Creek"
 }
 
@@ -362,6 +362,8 @@ class AppWindow(val stage: Stage) : StackPane() {
             }
             hideSplash()
             loading.join()
+            // Carry on with downloads that were running when the app closed.
+            runCatching { com.lagradost.cloudstream3.linux.Downloads.init() }
             if (Settings.autoUpdateExtensions) {
                 val updated = withContext(Engine.dispatcher) { runCatching { PluginManager.updateAll() }.getOrDefault(emptyList()) }
                 if (updated.isNotEmpty()) Toasts.show("Updated ${updated.joinToString()}")

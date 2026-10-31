@@ -88,7 +88,11 @@ It also appears in your app menu as **CloudStream**.
   (add `--delete-data` to also delete extensions, history and settings).
 
 Inside the Flatpak, the app can only open files from your **Downloads** folder (for
-subtitle files and side-loaded extensions).
+subtitle files and side-loaded extensions), and **downloaded videos** are saved in `~/Downloads/CloudStream`.
+
+From **7.0.0** the Flatpak uses the Freedesktop **25.08** runtime (24.08 is end of life). Installing or updating
+downloads it from Flathub once, so the Flathub line above must have been run. Afterwards you can remove the old one
+with `flatpak uninstall --user --unused`.
 
 ---
 
@@ -242,9 +246,16 @@ With USB or network debugging turned on in the device's developer options:
 adb install -r cloudstream-android-arm64-v8a.apk
 ```
 
+### Downloads on Android
+
+Downloaded movies and episodes are saved in the app's own folder
+(`Android/data/io.github.sherazi5110.cloudstream/files/Movies/CloudStream`); no storage permission is needed.
+On Android 13+ the app asks once to show notifications, for the download progress (downloads work without it).
+**Uninstalling the app deletes the downloads**; updating keeps them.
+
 ### Update
 
-Download the new `.apk` and install it the same way; your extensions, profiles and history are kept.
+Download the new `.apk` and install it the same way; your extensions, profiles, history and downloads are kept.
 If Android refuses with "App not installed" or "package conflicts", the new file was signed with a different key:
 uninstall the old app first (this deletes its data), then install the new one.
 

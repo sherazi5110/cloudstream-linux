@@ -282,8 +282,8 @@ fun formatMinutes(minutes: Int): String = if (minutes >= 60) "${minutes / 60}h $
 
 /** TMDB / IMDb / AniList facts for a title page or banner (null until loaded, or when nothing matched). */
 @Composable
-fun rememberMetadata(r: com.lagradost.cloudstream3.LoadResponse?): io.github.sherazi5110.cloudstream.Metadata.Info? {
-    val state = androidx.compose.runtime.produceState<io.github.sherazi5110.cloudstream.Metadata.Info?>(null, r?.url) {
+fun rememberMetadata(r: com.lagradost.cloudstream3.LoadResponse?, version: Int = 0): io.github.sherazi5110.cloudstream.Metadata.Info? {
+    val state = androidx.compose.runtime.produceState<io.github.sherazi5110.cloudstream.Metadata.Info?>(null, r?.url, version) {
         value = r?.let { runCatching { io.github.sherazi5110.cloudstream.Metadata.details(it) }.getOrNull() }
     }
     return state.value

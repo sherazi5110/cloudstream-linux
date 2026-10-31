@@ -22,6 +22,7 @@ import io.github.sherazi5110.cloudstream.Library
 import io.github.sherazi5110.cloudstream.LinkEvent
 import io.github.sherazi5110.cloudstream.Playable
 import io.github.sherazi5110.cloudstream.Settings
+import io.github.sherazi5110.cloudstream.SkipTimes
 import io.github.sherazi5110.cloudstream.StreamProxy
 import io.github.sherazi5110.cloudstream.WatchEntry
 import kotlinx.coroutines.CoroutineScope
@@ -107,6 +108,12 @@ class PlayerController(
     val isLive = live || response is LiveStreamLoadResponse
     private var languagesApplied = false
 
+    /** Intro/recap/credits times (anime, from AniSkip) and the one the playhead is in, if any. */
+    var segments by mutableStateOf<List<SkipTimes.Segment>>(emptyList())
+    var activeSegment by mutableStateOf<SkipTimes.Segment?>(null)
+    private var segmentsRequested = false
+    private val autoSkipped = mutableSetOf<SkipTimes.Segment>()
+
     val playables = Engine.playables(response)
     val next: Playable? = playables.indexOfFirst { it.data == playable.data && it.dub == playable.dub }
         .takeIf { it >= 0 }?.let { playables.getOrNull(it + 1) }
@@ -123,8 +130,8 @@ class PlayerController(
                 }
                 MediaPlayer.Event.Paused -> playing = false
                 MediaPlayer.Event.Buffering -> buffering = e.buffering < 100f
-                MediaPlayer.Event.TimeChanged -> { time = e.timeChanged; if (buffering && playing) buffering = false }
-                MediaPlayer.Event.LengthChanged -> length = e.lengthChanged
+                MediaPlayer.Event.TimeChanged -> { time = e.timeChanged; if (buffering && playing) buffering = false; updateSkip(e.timeChanged) }
+                MediaPlayer.Event.LengthChanged -> { length = e.lengthChanged; loadSegments() }
                 MediaPlayer.Event.EndReached -> { playing = false; ended = true; save(finished = true) }
                 MediaPlayer.Event.EncounteredError -> main.post { failover() }
             }
@@ -241,6 +248,33 @@ class PlayerController(
     fun addSubtitleFile(file: java.io.File) {
         selectedSubtitle = file.absolutePath
         player.addSlave(IMedia.Slave.Type.Subtitle, Uri.fromFile(file), true)
+    }
+
+    private fun loadSegments() {
+        if (segmentsRequested || isLive || length <= 0 || !SkipTimes.applies(response)) return
+        if (!Settings.skipButtons && !Settings.autoSkip && !Settings.autoPlayNext) return
+        segmentsRequested = true
+        scope.launch { segments = runCatching { SkipTimes.forEpisode(response, playable.episode, length) }.getOrDefault(emptyList()) }
+    }
+
+    private fun updateSkip(t: Long) {
+        val seg = segments.firstOrNull { t >= it.start && t < it.end - 1000 }
+        if (seg != null && Settings.autoSkip && seg !in autoSkipped) {
+            autoSkipped += seg
+            main.post { seekTo(seg.end) }
+            activeSegment = null
+            return
+        }
+        activeSegment = seg?.takeIf { Settings.skipButtons }
+    }
+
+    fun skipSegment() { activeSegment?.let { seekTo(it.end) }; activeSegment = null }
+
+    /** Where the next-episode countdown starts: at the credits if known, else 20 s before the end. */
+    fun countdownStart(): Long? {
+        if (next == null || isLive || length < 5 * 60_000) return null
+        val credits = segments.firstOrNull { it.kind == SkipTimes.Kind.CREDITS && it.start > length / 2 && it.start < length - 5000 }
+        return credits?.start ?: (length - 20_000)
     }
 
     fun togglePause() = if (player.isPlaying) player.pause() else player.play()

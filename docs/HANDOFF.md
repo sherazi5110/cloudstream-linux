@@ -2,7 +2,39 @@
 
 Read this first when continuing work on CloudStream for Linux.
 
-## State (2026-10-29)
+## State (2026-10-31)
+
+- Branch **`v7`** (from main after the Android app was merged, PR #10), version **7.0.0** for Linux and Android
+  (`AppWindow.VERSION`, metainfo, `android/app/build.gradle.kts` default; CI uses the tag). Release notes for the
+  release body: `docs/releases/7.0.0.md` (CI puts `docs/releases/<version>.md` above `.github/release-install.md`).
+  Each feature exists twice: Linux (`app/…/linux`) and Android (`android/…/cloudstream`), the logic files copied
+  with only package/logging/paths changed. Keep the copies in step.
+  1. **"Wrong match?"** (`Metadata.searchCandidates/chosenMatch/chooseMatch`, stored as `match:<hash>` in the metadata
+     prefs; `(null, 0)` = "no match"). UI: `MatchSheet` in `ui/DetailsPage.kt`; Android `ui/MatchDialog.kt`.
+  2. **Skip intro + countdown** (`SkipTimes.kt`): AniSkip v2 by MAL id (extension's, else AniList `idMal` by title;
+     `-Dcs.aniskip=` for the mock). Settings `skip_buttons` (on) and `auto_skip` (off), per profile. Linux
+     `BuiltinPlayer` (`skipButton`, `nextCard`, `updateCountdown`); Android `PlayerController.segments/activeSegment/
+     countdownStart` + `NextEpisodeCard` in `PlayerScreen`. Countdown only for episodes over 5 min
+     (`-Dcs.countdown.min=` for tours), from the credits (if inside the second half) or 20 s before the end.
+  3. **TV guide grid** (`LiveTv.programmes/hasGuide`): Linux `ui/GuideGrid.kt` (GridPane: fixed names + ruler kept in
+     step with one ScrollPane, now line, 12 h, max 250 rows) toggled by *TV guide* in `LiveTvPage`'s top bar; Android
+     `ui/GuideGrid.kt` (rows in a LazyColumn sharing one horizontal ScrollState).
+  4. **Downloads** (`Downloads.kt`): JSON state `downloads.json` (per item: profile, state, bytes/segments for resume,
+     resolved source + headers). 2 at a time. Picks the best ranked VIDEO/M3U8 link; direct files resume with Range
+     into `<file>.part`; HLS picks the variant at the preferred quality, joins segments (fMP4 init → .mp4, else .ts),
+     AES-128 (IV or sequence number), byte ranges, retries; DRM/live refused. On an error with a saved source it asks
+     the extension again once (`retried`). `OfflineApi(apiName)` plays files under the extension's name (so progress
+     is shared); `Engine.links` emits the local file first and `Engine.rank` puts it first. Linux folder: XDG
+     Downloads/CloudStream or `Settings.downloadFolder`; UI `ui/DownloadsUi.kt` (button, episode badge, Library tab).
+     Android folder: `getExternalFilesDir(MOVIES)/CloudStream`; `DownloadService` (foreground, dataSync, progress
+     notification, Pause all) started by `Downloads.onChange` in `App.init`; UI `ui/DownloadsUi.kt`.
+  5. **Flatpak runtime 25.08**: `ffmpeg-full` extension removed (25.08's `codecs-extra` installs with the runtime),
+     `cflags: -std=gnu17` for libdvbpsi and VLC (25.08's GCC defaults to C23), CI image `freedesktop-25.08`.
+     Not built locally: watch the first CI run.
+  6. `SiteOverrides.originals` is keyed per loaded instance (a reloaded extension's new address is picked up).
+  - Tests: `./gradlew test`, 25 tests (new `DownloadsTest`; guide and skip-time checks in `LiveTvMetadataTest`).
+    Tours: `CS_SCREENSHOT_ONLY=v7` (match sheet, skip button, countdown), `downloads`, `guide`. Android: compiled and
+    release APKs built; no emulator here (no KVM), so check on a device.
 
 - `main` = release **V5.0.0** (published with .deb, .flatpak and .tar). Tags use a capital V (`V5.0.0`);
   CI publishes a release for any tag starting with `v` or `V`.
@@ -77,7 +109,7 @@ Read this first when continuing work on CloudStream for Linux.
      extension says `hasNext = false` (Demo's "Endless catalog" has 4 pages for testing). **Posters on slow
      connections** (`Images`): disk cache read without waiting for a download slot, 12 slots, posters that left
      the screen give their slot up, TMDB images fetched at the shown width, one retry, shorter timeouts.
-- Tests: `./gradlew test`, 22 tests, all passing (libVLC must be installed for the playback test).
+- Tests (v5): `./gradlew test`, 22 tests, all passing (libVLC must be installed for the playback test).
 
 ## How the owner works
 
@@ -108,15 +140,13 @@ the subtitles part (OpenSubtitles v3 + Cinemeta). Suggested design:
 ## Remaining ideas (from the owner's recording of the other app)
 
 Not done yet, roughly by value: Cloudflare solver (JavaFX WebView implementing `WebViewResolver`; note
-javafx-web adds a lot of size), downloads for offline viewing, Discord "now watching", AniSkip
-(skip intro), a TV guide grid for Live TV, "wrong match? search TMDB" on the title page, details page
+javafx-web adds a lot of size), Discord "now watching", downloads of DASH / separate-audio HLS, details page
 redesign like the Home banner, rename catalog rows, UI zoom, extension tabs with update history, more subtitle providers
 (SubDL/Subsource need API keys), open a local video file, RPM/AppImage packages.
 
 ## Upkeep (see the owner's question about the app ageing)
 
-- Flatpak runtime is Freedesktop **24.08**, end of life around now: move to 25.08 in
-  `packaging/flatpak/*.yml` and the CI container image.
+- Flatpak runtime is Freedesktop **25.08** (since 7.0.0); next move to 26.08 around August 2027.
 - VLC source for the Flatpak comes from Ubuntu's archive (`vlc_3.0.24.orig.tar.xz`); add VideoLAN's
   `download.videolan.org` as a mirror URL in case Ubuntu drops it.
 - GitHub warns that Node 20 actions are deprecated: bump action versions in `.github/workflows/build.yml`.

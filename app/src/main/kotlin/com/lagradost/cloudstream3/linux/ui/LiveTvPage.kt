@@ -38,7 +38,8 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
     private val chips = ChipGroup { i -> group = chipKeys.getOrNull(i); renderBody() }
     private var chipKeys: List<String?> = emptyList()
     private val body = VBox(30.0)
-    private val content = VBox(22.0, chipsScroll(), body).apply { pad(0.0, 40.0, 48.0, 40.0) }
+    private val chipsNode = chipsScroll()
+    private val content = VBox(22.0, chipsNode, body).apply { pad(0.0, 40.0, 48.0, 40.0) }
     private val scroll = pageScroll(VBox(heroHolder, content))
     private var shown = PAGE
     private val searchField = TextField().apply {
@@ -54,6 +55,10 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
         contentDisplay = javafx.scene.control.ContentDisplay.RIGHT; graphic = icon(Icons.EXPAND, 12.0)
     }
     private val unsubscribe: () -> Unit
+    private var guideMode = false
+    private val guideHolder = StackPane().apply { VBox.setVgrow(this, javafx.scene.layout.Priority.ALWAYS); alignment = Pos.TOP_LEFT }
+    private val guideLayout = VBox(18.0).apply { pad(TopBar.HEIGHT + 14, 40.0, 24.0, 40.0) }
+    private val guideButton = button("TV guide", Icons.HISTORY, "topbar-source") { toggleGuide() }.apply { tooltip("Switch between the channel list and the TV guide") }
 
     init {
         children += scroll
@@ -63,7 +68,7 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
         reload()
     }
 
-    override fun topBarActions(): List<Node> = listOf(label("Live TV", "topbar-title"), sourceButton, countryButton, searchField)
+    override fun topBarActions(): List<Node> = listOf(label("Live TV", "topbar-title"), sourceButton, countryButton, guideButton, searchField)
     override val hasOwnSearch get() = true
 
     override fun onShow() {
@@ -95,6 +100,49 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
             renderHero()
             renderBody()
             LiveTv.loadGuides(force)
+        }
+    }
+
+    private fun toggleGuide() {
+        guideMode = !guideMode
+        guideButton.text = if (guideMode) "Channels" else "TV guide"
+        guideButton.graphic = icon(if (guideMode) Icons.APPS else Icons.HISTORY, 18.0)
+        if (guideMode) {
+            guideLayout.children.setAll(chipsNode, guideHolder)
+            children.setAll(guideLayout)
+            Nav.window.setTopBarSolid(true)
+        } else {
+            content.children.add(0, chipsNode)
+            children.setAll(scroll)
+            updateTopBar()
+        }
+        renderBody()
+    }
+
+    /** The page's main area: the channel rows, or the guide grid in guide mode. */
+    private fun show(nodes: List<Node>) {
+        if (guideMode) guideHolder.children.setAll(if (nodes.size == 1) nodes else listOf(VBox(16.0, *nodes.toTypedArray())))
+        else body.children.setAll(nodes)
+    }
+    private fun show(vararg nodes: Node) = show(nodes.toList())
+
+    private fun renderGuide(list: List<LiveTv.Channel>, favs: Set<String>, query: String) {
+        val filtered = list.filter { c ->
+            (group == ALL || (group == FAVOURITES && c.key in favs) || (c.group ?: "Other") == group) &&
+                (query.isEmpty() || c.name.lowercase().contains(query) || c.group.orEmpty().lowercase().contains(query))
+        }.sortedByDescending { it.key in favs }
+        when {
+            !LiveTv.hasGuide() -> show(emptyState(Icons.HISTORY, "No TV guide yet",
+                "None of your sources has a guide (XMLTV) loaded. Xtream logins include one; for an M3U playlist, " +
+                    "add its guide address in Settings → Live TV sources. It can take a moment to load after adding.",
+                button("Refresh guide", Icons.REFRESH, "btn-accent") { ui.launch { LiveTv.loadGuides(force = true) } }))
+            filtered.isEmpty() -> show(label("No channels match.", "muted"))
+            else -> {
+                val grid = GuideGrid(filtered.take(GuideGrid.MAX_CHANNELS)) { play(it) }
+                VBox.setVgrow(grid, javafx.scene.layout.Priority.ALWAYS)
+                val note = if (filtered.size > GuideGrid.MAX_CHANNELS) label("Showing the first ${GuideGrid.MAX_CHANNELS} of ${filtered.size} channels: pick a category or search to narrow.", "muted") else null
+                guideHolder.children.setAll(VBox(10.0, *listOfNotNull(note, grid).toTypedArray()).apply { VBox.setVgrow(grid, javafx.scene.layout.Priority.ALWAYS) })
+            }
         }
     }
 
@@ -180,7 +228,7 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
     }
 
     private fun updateTopBar() {
-        if (scene == null) return
+        if (scene == null || guideMode) return
         val offset = scroll.vvalue * ((scroll.content as Region).height - scroll.viewportBounds.height).coerceAtLeast(0.0)
         Nav.window.setTopBarSolid(heroHolder.height < 100 || offset > heroHolder.height - TopBar.HEIGHT - 40)
     }
@@ -193,7 +241,7 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
         when {
             sources.isEmpty() -> {
                 chips.isVisible = false
-                body.children.setAll(emptyState(Icons.TV, "Add a Live TV source",
+                show(emptyState(Icons.TV, "Add a Live TV source",
                     "Add an IPTV playlist (M3U), an Xtream Codes login, or a Stremio / Nuvio TV add-on. " +
                         "Live TV sources only show here, never on Home.",
                     if (com.lagradost.cloudstream3.linux.Profiles.isKids) null
@@ -201,12 +249,12 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
                 return
             }
             loading && list.isEmpty() -> {
-                body.children.setAll(hbox(10.0, ProgressIndicator().apply { setPrefSize(22.0, 22.0) }, label("Loading channels…", "muted")))
+                show(hbox(10.0, ProgressIndicator().apply { setPrefSize(22.0, 22.0) }, label("Loading channels…", "muted")))
                 return
             }
             list.isEmpty() -> {
                 chips.isVisible = false
-                body.children.setAll(emptyState(Icons.INFO, "No channels",
+                show(emptyState(Icons.INFO, "No channels",
                     if (com.lagradost.cloudstream3.linux.Profiles.isKids) "There are no children's channels in these sources."
                     else "The sources returned no channels. Check the address in Settings → Live TV sources, or refresh."))
                 return
@@ -219,6 +267,7 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
         val labels = listOf("All ${list.size}", "★ Favourites ${list.count { it.key in favs }}") + groups.map { it.key }
         chips.setItems(labels, chipKeys.indexOf(group).coerceAtLeast(0))
         val query = searchField.text.trim().lowercase()
+        if (guideMode) { renderGuide(list, favs, query); return }
 
         if (group == ALL && query.isEmpty()) {
             val byKey = list.associateBy { it.key }
@@ -226,7 +275,7 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
             LiveTv.recent().mapNotNull { byKey[it] }.takeIf { it.isNotEmpty() }?.let { rows += row("Recently watched", it, null) }
             list.filter { it.key in favs }.takeIf { it.isNotEmpty() }?.let { rows += row("Favourites", it, FAVOURITES) }
             groups.take(14).forEach { (g, n) -> rows += row(g, list.filter { (it.group ?: "Other") == g }, g, n) }
-            body.children.setAll(rows)
+            show(rows)
             return
         }
         val filtered = list.filter { c ->
@@ -234,11 +283,11 @@ class LiveTvPage : StackPane(), Refreshable, TopBarActions, Disposable {
                 (query.isEmpty() || c.name.lowercase().contains(query) || c.group.orEmpty().lowercase().contains(query))
         }
         if (filtered.isEmpty()) {
-            body.children.setAll(label(if (group == FAVOURITES) "No favourites yet. Use the star on a channel to add it." else "No channels match.", "muted"))
+            show(label(if (group == FAVOURITES) "No favourites yet. Use the star on a channel to add it." else "No channels match.", "muted"))
             return
         }
         val grid = FlowPane(16.0, 18.0).apply { children.setAll(filtered.take(shown).map { card(it) }) }
-        body.children.setAll(listOfNotNull(label("${filtered.size} channels", "muted"), grid,
+        show(listOfNotNull(label("${filtered.size} channels", "muted"), grid,
             if (filtered.size > shown) label("Scroll for more", "faint") else null))
     }
 
