@@ -793,3 +793,15 @@
 .guide-title { -fx-text-fill: -cs-text; -fx-font-weight: bold; -fx-text-overrun: ellipsis; }
 .guide-time { -fx-text-fill: -cs-muted; -fx-font-size: 11px; }
 .guide-now { -fx-background-color: -cs-accent; }
+
+/* ---------- downloads ---------- */
+.dl-badge { -fx-background-color: rgba(0, 0, 0, 0.6); -fx-background-radius: 999; -fx-padding: 6; -fx-cursor: hand; -fx-spacing: 4; }
+.dl-badge .icon { -fx-background-color: white; }
+.dl-badge.idle { -fx-opacity: 0.0; }
+.episode-card:hover .dl-badge.idle { -fx-opacity: 1.0; }
+.dl-badge:hover { -fx-background-color: -cs-accent; }
+.dl-badge.busy { -fx-background-color: -cs-accent; -fx-padding: 5 10 5 8; }
+.dl-badge.done { -fx-background-color: -cs-good; }
+.dl-badge.failed { -fx-background-color: -cs-bad; }
+.dl-badge-text { -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; }
+.bad { -fx-text-fill: -cs-bad; }

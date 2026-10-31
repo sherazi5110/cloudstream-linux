@@ -185,9 +185,10 @@ class DetailsPage(
             tooltip(if (watched) "Mark as not watched" else if (playables.size > 1) "Mark every episode as watched" else "Mark as watched")
         }
         val trailer = extra?.trailer?.takeIf { Metadata.extras }?.let { t -> button("Trailer", Icons.PLAY_CIRCLE, "btn-ghost") { openUrl(t) }.tooltip("Opens on YouTube") }
-        val actions = hbox(10.0, *listOfNotNull(playSlot, button("Sources", Icons.MOVIE, "btn-ghost") {
+        val download = playables.singleOrNull()?.takeIf { api !is com.lagradost.cloudstream3.linux.OfflineApi }?.let { DownloadsUi.button(api, r, it) }
+        val actions = FlowPane(10.0, 10.0, *listOfNotNull(playSlot, button("Sources", Icons.MOVIE, "btn-ghost") {
             target()?.let { Playback.open(api, r, it, chooseManually = true) }
-        }.apply { isDisable = playables.isEmpty() }, trailer, watchedButton, bookmarkButton).toTypedArray())
+        }.apply { isDisable = playables.isEmpty() }, trailer, download, watchedButton, bookmarkButton).toTypedArray()).apply { alignment = Pos.CENTER_LEFT; maxWidth = 900.0 }
 
         val logo = (r.logoUrl ?: extra?.logo?.takeIf { Metadata.artwork })?.let { url ->
             ImageView(javafx.scene.image.Image(url, 880.0, 280.0, true, true, true)).apply { isPreserveRatio = true; fitWidth = 440.0; fitHeight = 140.0 }
@@ -259,7 +260,14 @@ class DetailsPage(
         }
         val grid = FlowPane(16.0, 18.0)
         groups.getOrNull(groupIndex)?.second?.forEach { ep -> grid.children += episodeCard(ep) }
-        episodesBox.children.setAll(FlowPane(14.0, 10.0, label("Episodes", "h3"), selector).apply { alignment = Pos.CENTER_LEFT }, grid)
+        val season = groups.getOrNull(groupIndex)?.second.orEmpty()
+        val downloadAll = button("Download ${if (groups.size > 1) "these" else "all"}", Icons.DOWNLOAD, "btn-ghost", "btn-small") {
+            val r = response ?: return@button
+            val todo = season.filter { com.lagradost.cloudstream3.linux.Downloads.get(api.name, it.data) == null }
+            todo.forEach { com.lagradost.cloudstream3.linux.Downloads.start(api, r, it) }
+            Toasts.show(if (todo.isEmpty()) "Already downloading these" else "Downloading ${todo.size} episode(s)", "Downloads" to { LibraryPage.wantDownloads = true; Nav.window.show(Tab.LIBRARY) })
+        }.tooltip("Download every episode in this list for offline viewing")
+        episodesBox.children.setAll(FlowPane(14.0, 10.0, label("Episodes", "h3"), selector, downloadAll).apply { alignment = Pos.CENTER_LEFT }, grid)
     }
 
     private fun episodeCard(ep: Playable): Node {
@@ -284,6 +292,7 @@ class DetailsPage(
             if (progress != null && progress > 0.92) children += label("Watched", "badge", "good").also {
                 StackPane.setAlignment(it, Pos.TOP_RIGHT); StackPane.setMargin(it, javafx.geometry.Insets(8.0))
             }
+            children += DownloadsUi.episodeBadge(api, r, ep).also { StackPane.setAlignment(it, Pos.TOP_LEFT); StackPane.setMargin(it, javafx.geometry.Insets(8.0)) }
             roundedClip(this, 10.0)
         }
         val number = listOfNotNull(ep.season?.let { "S$it" }, ep.episode?.let { "EPISODE $it" }).joinToString(" · ").ifEmpty { "EPISODE" }

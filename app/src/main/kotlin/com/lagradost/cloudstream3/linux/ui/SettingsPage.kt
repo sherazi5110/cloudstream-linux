@@ -625,6 +625,18 @@ class SettingsPage : StackPane(), Refreshable {
             section("Space used", *rows.toTypedArray()),
             section("Folders",
                 row("App data", AppDirs.data.absolutePath, button("Open", Icons.FOLDER, "btn-ghost", "btn-small") { openFolder(AppDirs.data) }),
+                row("Downloads", com.lagradost.cloudstream3.linux.Downloads.folder().absolutePath + "\nMovies and episodes you download for offline viewing.", hbox(8.0,
+                    button("Change…", Icons.EDIT, "btn-ghost", "btn-small") {
+                        val dir = javafx.stage.DirectoryChooser().apply {
+                            title = "Folder for downloads"
+                            com.lagradost.cloudstream3.linux.Downloads.folder().let { f -> (if (f.isDirectory) f else f.parentFile)?.takeIf { it.isDirectory }?.let { initialDirectory = it } }
+                        }.showDialog(scene?.window) ?: return@button
+                        Settings.downloadFolder = dir.absolutePath
+                        open("storage")
+                    },
+                    button("Open", Icons.FOLDER, "btn-ghost", "btn-small") { openFolder(com.lagradost.cloudstream3.linux.Downloads.folder()) },
+                    if (Settings.downloadFolder.isNotBlank()) button("Default", Icons.REFRESH, "btn-ghost", "btn-small") { Settings.downloadFolder = ""; open("storage") } else Region(),
+                )),
             ),
             section("Reset",
                 row("Reset settings", "App settings and this profile's theme, player and home settings go back to defaults. Extensions, repositories, profiles, library and history are kept.",

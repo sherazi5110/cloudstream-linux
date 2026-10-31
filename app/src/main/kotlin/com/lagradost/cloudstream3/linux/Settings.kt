@@ -155,6 +155,11 @@ object Settings {
         get() = string("show_nsfw", "false") == "true"
         set(v) = put("show_nsfw", v)
 
+    /** Where downloads go; blank = ~/Downloads/CloudStream. */
+    var downloadFolder: String
+        get() = string("download_folder", "")
+        set(v) = put("download_folder", v)
+
     var lastHomeProvider: String?
         get() = string("last_home_provider", "").ifBlank { null }
         set(v) = put("last_home_provider", v ?: "")

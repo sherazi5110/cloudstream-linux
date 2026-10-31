@@ -76,6 +76,29 @@ object Screenshots {
             com.lagradost.cloudstream3.linux.LiveTv.saved().forEach { com.lagradost.cloudstream3.linux.LiveTv.remove(it.id) }
             System.exit(0)
         }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "downloads") {
+            com.lagradost.cloudstream3.CloudStreamApp.setKey("demo_base_url", "http://localhost:8766")
+            val demo = com.lagradost.cloudstream3.linux.Engine.allProviders().firstOrNull { it.name.contains("Demo", true) }
+                ?: com.lagradost.cloudstream3.linux.PluginManager.loadPlugin(java.io.File("tests/DemoProvider/build/repo/Demo.cs3"),
+                    com.lagradost.cloudstream3.linux.PluginData("Demo", null, false, "Demo.cs3", 1)).getOrThrow().providers.single()
+            com.lagradost.cloudstream3.linux.Settings.sourcesTimeoutSeconds = 3
+            com.lagradost.cloudstream3.linux.Settings.downloadFolder = "/tmp/cs-tour-downloads"
+            Nav.open(demo.name, "http://localhost:8766/title/pixel_city", "Pixel City", null)
+            delay(3000)
+            val r = com.lagradost.cloudstream3.linux.Engine.load(demo, "http://localhost:8766/title/pixel_city")!!
+            com.lagradost.cloudstream3.linux.Engine.playables(r).take(2).forEach { com.lagradost.cloudstream3.linux.Downloads.start(demo, r, it) }
+            delay(1500)
+            capture(window, "$prefix-details-downloading.png")
+            delay(8000)
+            capture(window, "$prefix-details-downloaded.png")
+            com.lagradost.cloudstream3.linux.ui.LibraryPage.wantDownloads = true
+            window.show(Tab.LIBRARY)
+            delay(1500)
+            capture(window, "$prefix-library-downloads.png")
+            com.lagradost.cloudstream3.linux.Downloads.all().forEach { com.lagradost.cloudstream3.linux.Downloads.delete(it.id) }
+            com.lagradost.cloudstream3.linux.Settings.downloadFolder = ""
+            System.exit(0)
+        }
         if (System.getenv("CS_SCREENSHOT_ONLY") == "guide") {
             runCatching { com.lagradost.cloudstream3.linux.LiveTv.add(com.lagradost.cloudstream3.linux.LiveTv.Kind.M3U, "http://localhost:8766/iptv/playlist.m3u", "Free-TV", "http://localhost:8766/iptv/guide.xml") }
             window.show(Tab.LIVE)

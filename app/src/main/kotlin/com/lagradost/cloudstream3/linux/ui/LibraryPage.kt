@@ -16,18 +16,30 @@ class LibraryPage : StackPane(), Refreshable {
     private val body = VBox(20.0)
 
     init {
-        tabs.setItems(listOf("Continue Watching", "My list", "History"))
+        tabs.setItems(listOf("Continue Watching", "My list", "History", "Downloads"))
         children += pageScroll(vbox(22.0, label("Library", "h2"), tabs, body).pad(22.0, 36.0, 40.0, 36.0))
         Library.onChange { ui.launch { if (scene != null) render() } }
+        // The Downloads tab rows update themselves; re-render only when one is added or removed.
+        var count = -1
+        com.lagradost.cloudstream3.linux.Downloads.onChange {
+            javafx.application.Platform.runLater {
+                val n = com.lagradost.cloudstream3.linux.Downloads.all().size
+                if (n != count) { count = n; if (scene != null && tabs.selected == 3) render() }
+            }
+        }
     }
 
-    override fun onShow() = render()
+    override fun onShow() {
+        if (wantDownloads) { wantDownloads = false; tabs.select(3) }
+        render()
+    }
 
     private fun render() {
         body.children.setAll(when (tabs.selected) {
             0 -> continueWatching()
             1 -> bookmarks()
-            else -> history()
+            2 -> history()
+            else -> DownloadsUi.page()
         })
     }
 
@@ -85,5 +97,10 @@ class LibraryPage : StackPane(), Refreshable {
             hbox(10.0, spacer(), button("Clear history", Icons.DELETE, "btn-danger", "btn-small") { Library.clearHistory() }),
             VBox(*rows.toTypedArray()).apply { styleClass += "card"; pad(6.0) },
         )
+    }
+
+    companion object {
+        /** Set before showing the Library to open it on the Downloads tab. */
+        @JvmStatic var wantDownloads = false
     }
 }
