@@ -33,6 +33,28 @@ object Screenshots {
             capture(window, "$prefix-theme-dark.png")
             System.exit(0)
         }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "tools") {
+            window.show(Tab.HOME)
+            delay(2500)
+            (window.lookup("#home-source") as? javafx.scene.control.Button)?.fire()
+            delay(700)
+            capture(window, "$prefix-source-menu-tune.png")
+            window.lookupAll(".popover-tune").drop(1).firstOrNull()?.let { javafx.event.Event.fireEvent(it, click()) }
+            delay(900)
+            capture(window, "$prefix-source-menu-editor.png")
+            window.closeOverlay()
+            window.openSettings("developer")
+            delay(1200)
+            capture(window, "$prefix-developer-delete.png")
+            window.lookupAll(".btn-danger").firstOrNull()?.let { (it as javafx.scene.control.Button).fire() }
+            delay(700)
+            capture(window, "$prefix-developer-delete-confirm.png")
+            window.lookupAll(".sheet .btn-danger").lastOrNull()?.let { (it as javafx.scene.control.Button).fire() }
+            delay(1200)
+            capture(window, "$prefix-developer-deleted.png")
+            System.err.println("check: installed=${com.lagradost.cloudstream3.linux.PluginManager.installed().map { it.internalName }} providers=${com.lagradost.cloudstream3.linux.Engine.allProviders().map { it.name }}")
+            System.exit(0)
+        }
         if (System.getenv("CS_SCREENSHOT_ONLY") == "nsfw") {
             window.openSettings("profiles")
             delay(1500)

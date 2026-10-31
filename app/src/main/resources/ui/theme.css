@@ -748,3 +748,7 @@
 .cast-photo { -fx-background-radius: 999; -fx-border-color: -cs-line; -fx-border-width: 2; -fx-border-radius: 999; }
 .cast-name { -fx-font-weight: bold; -fx-font-size: 12px; }
 .cast-role { -fx-text-fill: -cs-muted; -fx-font-size: 11px; }
+.popover-tune { -fx-min-width: 30; -fx-min-height: 30; -fx-max-width: 30; -fx-max-height: 30; -fx-background-radius: 8; -fx-cursor: hand; }
+.popover-tune .icon { -fx-background-color: -cs-muted; }
+.popover-tune:hover { -fx-background-color: -cs-surface-3; }
+.popover-tune:hover .icon { -fx-background-color: -cs-accent; }

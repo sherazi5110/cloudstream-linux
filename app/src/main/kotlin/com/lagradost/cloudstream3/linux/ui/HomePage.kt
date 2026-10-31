@@ -96,8 +96,21 @@ class HomePage : StackPane(), Refreshable, TopBarActions {
 
     private fun showSourceMenu() {
         val rows = sources.map { src ->
-            Popover.row(if (src.key == FEED) icon(Icons.APPS, 18.0) else label(src.label.filter { it.isLetterOrDigit() }.take(2).uppercase(), "provider-badge", "small-badge"),
+            val row = Popover.row(if (src.key == FEED) icon(Icons.APPS, 18.0) else label(src.label.filter { it.isLetterOrDigit() }.take(2).uppercase(), "provider-badge", "small-badge"),
                 src.label, if (src.key == FEED) "${src.apis.size} extensions" else null, selected = src == current) { select(src) }
+            if (Profiles.isKids) return@map row
+            // Edit this extension's catalogs (or the feed) right from the menu.
+            val tune = StackPane(icon(Icons.TUNE, 16.0)).apply {
+                styleClass += "popover-tune"
+                tooltip(if (src.key == FEED) "Choose the feed's extensions and catalogs" else "Choose ${src.label}'s catalogs")
+                setOnMouseClicked {
+                    it.consume()
+                    Nav.window.closeOverlay()
+                    Nav.window.showOverlay(HomeManager(providers, src.apis.singleOrNull().takeIf { src.key != FEED }))
+                }
+            }
+            (row as javafx.scene.layout.HBox).children += tune
+            row
         }.toMutableList()
         if (rows.isNotEmpty()) rows += Popover.separator()
         if (!Profiles.isKids) rows += Popover.row(icon(Icons.TUNE, 18.0), "Customize home…") { Nav.window.showOverlay(HomeManager(providers, null)) }

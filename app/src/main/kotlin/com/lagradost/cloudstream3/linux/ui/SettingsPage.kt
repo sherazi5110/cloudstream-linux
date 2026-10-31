@@ -477,8 +477,37 @@ class SettingsPage : StackPane(), Refreshable {
         )
     }
 
+    /**
+     * Deletes the extension (or Stremio add-on) that provides [api]. An extension can provide several
+     * providers; they all go, so the confirmation names them. [done] runs after it's removed.
+     */
+    private fun deleteProvider(api: com.lagradost.cloudstream3.MainAPI, done: (List<com.lagradost.cloudstream3.MainAPI>) -> Unit) {
+        if (api is com.lagradost.cloudstream3.linux.StremioApi) {
+            val addon = com.lagradost.cloudstream3.linux.StremioAddons.all().firstOrNull { it.base == api.mainUrl } ?: return
+            Nav.window.showOverlay(ConfirmSheet("Remove ${addon.manifest.name}?", "This Stremio add-on is removed from Home, Search and Live TV.", "Remove") {
+                com.lagradost.cloudstream3.linux.StremioAddons.remove(addon.url)
+                Toasts.show("${addon.manifest.name} removed")
+                done(listOf(api))
+            })
+            return
+        }
+        val plugin = PluginManager.loaded.values.firstOrNull { p -> p.providers.any { it === api } }
+            ?: return Toasts.show("Couldn't find the extension file for ${api.name}")
+        val providers = plugin.providers
+        val name = plugin.data.name ?: plugin.data.internalName
+        val also = providers.filter { it !== api }.map { it.name }.distinct()
+        val message = if (also.isEmpty()) "The extension is uninstalled. You can install it again from Extensions."
+            else "This extension also provides ${also.joinToString()}; those are removed too. You can install it again from Extensions."
+        Nav.window.showOverlay(ConfirmSheet("Delete $name?", message, "Delete") {
+            PluginManager.uninstall(plugin.data.internalName)
+            Toasts.show("$name deleted")
+            done(providers)
+        })
+    }
+
     private fun developer(): List<Node> {
         val tests = VBox(8.0)
+        val rowsByApi = mutableMapOf<com.lagradost.cloudstream3.MainAPI, Node>()
         fun testRow(api: com.lagradost.cloudstream3.MainAPI): Node {
             val steps = VBox(4.0)
             val state = label("Not tested", "faint", "small")
@@ -503,8 +532,12 @@ class SettingsPage : StackPane(), Refreshable {
                     runButton.isDisable = false
                 }
             }
-            return vbox(6.0, hbox(12.0, label(api.name, "bold"), label(api.mainUrl, "faint", "small"), spacer(), state, runButton), steps)
+            val deleteButton = button(null, Icons.DELETE, "btn-danger", "btn-small") {
+                deleteProvider(api) { gone -> gone.forEach { g -> rowsByApi.remove(g)?.let { tests.children.remove(it) } } }
+            }.tooltip("Delete this extension")
+            return vbox(6.0, hbox(12.0, label(api.name, "bold"), label(api.mainUrl, "faint", "small"), spacer(), state, runButton, deleteButton), steps)
                 .apply { styleClass += "card-row" }
+                .also { rowsByApi[api] = it }
         }
         Engine.allProviders().forEach { tests.children += testRow(it) }
         if (tests.children.isEmpty()) tests.children += label("No extensions loaded.", "muted").pad(12.0)
