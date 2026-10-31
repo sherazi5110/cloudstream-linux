@@ -18,6 +18,9 @@
       <li>Subtitles from extensions, from OpenSubtitles (no account needed) or from files</li>
       <li>Home catalogs you can hide, reorder and combine across extensions</li>
       <li>Library with history, resume and Continue Watching</li>
+      <li>Downloads for watching offline, including HLS streams</li>
+      <li>Skip intro for anime and a next-episode countdown</li>
+      <li>Live TV with a TV guide grid</li>
       <li>Themes, including AMOLED black and light, with custom accent colours and wallpapers</li>
     </ul>
   </description>
@@ -36,6 +39,7 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="7.0.0" date="2026-10-31"/>
     <release version="6.0.1" date="2026-10-30"/>
     <release version="6.0.0" date="2026-10-29"/>
     <release version="5.0.0" date="2026-10-29"/>

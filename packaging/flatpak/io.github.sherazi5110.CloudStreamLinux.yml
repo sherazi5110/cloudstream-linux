@@ -8,7 +8,7 @@
 #   ./scripts/build-flatpak.sh   ->  build/cloudstream-linux.flatpak
 id: io.github.sherazi5110.CloudStreamLinux
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 command: cloudstream-linux
 
@@ -23,17 +23,8 @@ finish-args:
   # Loading subtitle files and side-loading extensions from Downloads.
   - --filesystem=xdg-download
 
-add-extensions:
-  # Full FFmpeg (H.264, HEVC, AAC, …), which libVLC decodes with.
-  org.freedesktop.Platform.ffmpeg-full:
-    directory: lib/ffmpeg
-    version: '24.08'
-    add-ld-path: .
-    no-autodownload: false
-    autodelete: false
-
-cleanup-commands:
-  - mkdir -p /app/lib/ffmpeg
+# Codecs: from 25.08 the runtime's codecs-extra extension (H.264, HEVC, AAC, …, which libVLC
+# decodes with through FFmpeg) installs automatically with the runtime; nothing to list here.
 
 cleanup:
   - /include
@@ -46,6 +37,9 @@ cleanup:
 modules:
   # Needed by VLC's MPEG-TS demuxer, which HLS streams use.
   - name: libdvbpsi
+    build-options:
+      # The 25.08 SDK's GCC defaults to C23; these older C sources expect C17.
+      cflags: -std=gnu17
     config-opts:
       - --disable-static
     sources:
@@ -56,6 +50,8 @@ modules:
   # libVLC 3 (VideoLAN's release tarball, as mirrored in Ubuntu's archive).
   - name: vlc
     build-options:
+      # The 25.08 SDK's GCC defaults to C23; VLC 3 expects C17.
+      cflags: -std=gnu17
       env:
         # VLC's configure looks for a native compiler named c99/c11 for its build tools;
         # the Freedesktop SDK only has gcc.

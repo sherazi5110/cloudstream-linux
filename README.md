@@ -12,6 +12,21 @@ official Android app uses, with no changes to the extensions.
 > **Android app (in testing):** a new app for **phones (touch)** and **Android TV (remote)** with this app's look,
 > profiles, Live TV, Stremio add-ons, TMDB and the VLC player. [More below](#android-app-in-testing).
 
+- **New in 7.0 (Linux and Android):**
+  - **Downloads** for watching offline: *Download* on a movie, a download button on each episode (or *Download these* for a
+    whole season). Direct files and HLS streams (joined into one file, AES-128 decrypted), with subtitles saved next to
+    them. Downloads resume after a pause, a restart or a dropped connection, and a downloaded episode plays from the file
+    even when you're offline. Library → **Downloads** lists them. Linux saves to `~/Downloads/CloudStream` (changeable in
+    Settings → Storage); Android keeps a notification with progress while it downloads.
+  - **Skip intro** for anime (times from the community AniSkip database): *Skip intro*, *Skip recap* and *Skip credits*
+    buttons, or skip automatically (Settings → Playback).
+  - **Next-episode countdown:** at the credits (or 20 seconds before the end) a card counts down to the next episode, with
+    *Play now* and *Cancel*.
+  - **TV guide grid** for Live TV: channels down the side, times across the top, a line at "now"; click a programme to
+    watch the channel.
+  - **"Wrong match?"** on title pages: when ratings or artwork belong to a different film, search TMDB and pick the right
+    one (or *No match*).
+  - The Flatpak moves to the Freedesktop **25.08** runtime.
 - **New look (6.0):** a slim icon rail, a clean top bar (source picker, search, your profile) and a full-width featured banner with backdrop, rating, "#1 in …", plot, *Play* and *More Info*. A new logo (a big C with an s inside, over a cloud) whose letters follow your theme colour.
 - **Live TV (6.0.1):** a Live TV page of its own (below Home in the rail) for IPTV: **M3U playlists with XMLTV guides**, **Xtream Codes** logins, and **Stremio / Nuvio TV add-ons** (add-ons with TV channel catalogs move here automatically) and playlist files. Channel logos come from the playlist, or from the open iptv-org database when missing. What's on now and next, categories from the playlist's groups, favourites, recently watched, channel search and a country filter. Live TV sources never appear on Home.
 - **Metadata & integrations (6.0.1):** add your free **TMDB** API key for ratings on posters, wide backdrops and title logos, cast with photos, trailers and similar titles on every extension; **IMDb ratings via Cinemeta** and **AniList** scores for anime need no key.
@@ -41,6 +56,9 @@ official Android app uses, with no changes to the extensions.
 
 | | |
 |---|---|
+| ![Downloads in the Library](docs/screenshots/library-downloads.png) | ![Download buttons on episodes](docs/screenshots/details-downloads.png) |
+| ![Skip intro](docs/screenshots/player-skip.png) | ![Next-episode countdown](docs/screenshots/player-next.png) |
+| ![TV guide grid](docs/screenshots/livetv-guide.png) | ![Wrong match? Choose the right title](docs/screenshots/match.png) |
 | ![Home](docs/screenshots/home.png) | ![Who's watching](docs/screenshots/profiles.png) |
 | ![Profile editor](docs/screenshots/profile-editor.png) | ![Kids profile settings](docs/screenshots/profile-editor-kids.png) |
 | ![Kids home](docs/screenshots/kids-home.png) | ![Stremio add-ons](docs/screenshots/addons.png) |
@@ -82,8 +100,16 @@ the Linux app's icon rail, top bar, banner and title page.
   card, large text. Arrows move, OK opens, Back goes back, Menu marks watched/removes. CH+/CH− switch Live TV channels.
 
 **How it works:** CloudStream extensions load natively (no translation step, unlike on Linux). Stremio add-ons, Live TV
-(M3U/XMLTV, Xtream, Stremio TV add-ons), TMDB/IMDb/AniList metadata, profiles, kids profiles with a parent PIN and the
-adult-content setting come over from the Linux app.
+(M3U/XMLTV, Xtream, Stremio TV add-ons) with the TV guide grid, TMDB/IMDb/AniList metadata with "Wrong match?", profiles,
+kids profiles with a parent PIN, the adult-content setting, downloads, skip intro and the next-episode countdown come
+over from the Linux app.
+
+**New in 7.0 on Android:** **Downloads** (the *Download* button on a movie; on episodes, the download icon in the
+phone list, or hold OK / long-press an episode and choose *Download*). They continue in the background with a progress
+notification (*Pause all* in it), and are listed under My list → **Downloads**. Files are kept in the app's own folder
+(`Android/data/io.github.sherazi5110.cloudstream/files/Movies/CloudStream`), so no storage permission is needed;
+uninstalling the app deletes them. **Skip intro** (anime) and the **next-episode countdown** appear in the player (on a
+TV, OK presses the button, Back cancels the countdown). **TV guide:** the clock button next to the Live TV search.
 
 **Install:** see [INSTALL.md → Android](INSTALL.md#android-phones-tablets-and-android-tv) (which `.apk` to pick, phones,
 Android TV / Fire TV with Downloader, adb). Building it yourself: [android/README.md](android/README.md). Plan and status:

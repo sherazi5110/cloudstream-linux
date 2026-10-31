@@ -77,3 +77,11 @@ See [android/README.md](../android/README.md) for building and the code layout.
 Not in phase 1 (by plan): profiles, Live TV, Stremio add-ons, TMDB/IMDb/AniList, Settings and themes, online
 subtitles (phase 2); CI job, release keystore, README/INSTALL sections (phase 3). Not done yet either: the
 `androidx.tv` library is not used (focus handling is plain Compose), Cast, downloads, extension settings screens.
+
+### 7.0.0 (2026-10-31, branch `v7`)
+
+Released together with Linux 7.0.0 from one tag (`V7.0.0`). New on both platforms: downloads for offline viewing
+(`Downloads.kt`, `DownloadService.kt`, `ui/DownloadsUi.kt`; app-specific storage, foreground service with a progress
+notification), skip intro / recap / credits from AniSkip and the next-episode countdown (`SkipTimes.kt`, `PlayerScreen`),
+the Live TV guide grid (`ui/GuideGrid.kt`) and "Wrong match?" (`ui/MatchDialog.kt`). Still not done: Cast, extension
+settings screens, `androidx.tv`.

@@ -273,7 +273,7 @@ class PlayerController(
     /** Where the next-episode countdown starts: at the credits if known, else 20 s before the end. */
     fun countdownStart(): Long? {
         if (next == null || isLive || length < 5 * 60_000) return null
-        val credits = segments.firstOrNull { it.kind == SkipTimes.Kind.CREDITS && it.start > length / 2 }
+        val credits = segments.firstOrNull { it.kind == SkipTimes.Kind.CREDITS && it.start > length / 2 && it.start < length - 5000 }
         return credits?.start ?: (length - 20_000)
     }
 

@@ -397,7 +397,7 @@ class BuiltinPlayer(
         flash(if (ms > 0) "+${ms / 1000} s" else "−${-ms / 1000} s")
     }
 
-    private fun seekTo(ms: Long) {
+    internal fun seekTo(ms: Long) {
         if (!player.status().isSeekable) { pendingSeek = ms; return }
         player.controls().setTime(ms)
         position = ms
@@ -473,8 +473,8 @@ class BuiltinPlayer(
     /** At the credits (from AniSkip), or 20 s before the end: "Next episode in 10…", then plays it. */
     private fun updateCountdown(t: Long) {
         val n = next ?: return
-        if (!Settings.autoPlayNext || duration < 5 * 60_000) return
-        val credits = segments.firstOrNull { it.kind == SkipTimes.Kind.CREDITS && it.start > duration / 2 }?.start
+        if (!Settings.autoPlayNext || duration < (System.getProperty("cs.countdown.min")?.toLongOrNull() ?: (5 * 60_000L))) return
+        val credits = segments.firstOrNull { it.kind == SkipTimes.Kind.CREDITS && it.start > duration / 2 && it.start < duration - 5000 }?.start
         val startAt = credits ?: (duration - 20_000)
         if (t < startAt - 1000) {
             // Seeking back before the credits resets it.

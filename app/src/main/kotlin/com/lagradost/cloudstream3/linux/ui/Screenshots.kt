@@ -2,6 +2,9 @@ package com.lagradost.cloudstream3.linux.ui
 
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.SearchResponse
+import com.lagradost.cloudstream3.addEpisodes
+import com.lagradost.cloudstream3.newAnimeLoadResponse
+import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.linux.Engine
 import com.lagradost.cloudstream3.linux.Settings
 import javafx.scene.image.WritableImage
@@ -97,6 +100,42 @@ object Screenshots {
             capture(window, "$prefix-library-downloads.png")
             com.lagradost.cloudstream3.linux.Downloads.all().forEach { com.lagradost.cloudstream3.linux.Downloads.delete(it.id) }
             com.lagradost.cloudstream3.linux.Settings.downloadFolder = ""
+            System.exit(0)
+        }
+        if (System.getenv("CS_SCREENSHOT_ONLY") == "v7") {
+            val m = "http://localhost:8766"
+            com.lagradost.cloudstream3.CloudStreamApp.setKey("demo_base_url", m)
+            System.setProperty("cs.tmdb.base", "$m/tmdb/3"); System.setProperty("cs.tmdb.images", "$m/tmdbimg/")
+            System.setProperty("cs.anilist", "$m/anilist"); System.setProperty("cs.aniskip", "$m/aniskip")
+            System.setProperty("cs.countdown.min", "60000")
+            com.lagradost.cloudstream3.linux.Metadata.tmdbKey = "0123456789abcdef0123456789abcdef"
+            com.lagradost.cloudstream3.linux.Settings.autoPlayNext = true
+            com.lagradost.cloudstream3.linux.Settings.sourcesTimeoutSeconds = 3
+            val demo = com.lagradost.cloudstream3.linux.Engine.allProviders().firstOrNull { it.name.contains("Demo", true) }
+                ?: com.lagradost.cloudstream3.linux.PluginManager.loadPlugin(java.io.File("tests/DemoProvider/build/repo/Demo.cs3"),
+                    com.lagradost.cloudstream3.linux.PluginData("Demo", null, false, "Demo.cs3", 1)).getOrThrow().providers.single()
+            Nav.open(demo.name, "$m/title/pixel_city", "Pixel City", null)
+            delay(4000)
+            window.lookupAll(".link-button").map { it as javafx.scene.control.Label }.firstOrNull { it.text == "Wrong match?" || it.text == "Find on TMDB" }
+                ?.let { javafx.event.Event.fireEvent(it, click()) }
+            delay(2500)
+            capture(window, "$prefix-match.png")
+            window.closeOverlay()
+            delay(500)
+            val anime = demo.newAnimeLoadResponse("Pixel Anime", "$m/title/pixel_city", com.lagradost.cloudstream3.TvType.Anime) {
+                addEpisodes(com.lagradost.cloudstream3.DubStatus.Subbed, listOf(
+                    demo.newEpisode("pixel_city|1") { episode = 1; name = "The Missing Frame" },
+                    demo.newEpisode("pixel_city|2") { episode = 2; name = "Compression" },
+                ))
+            }
+            Playback.open(demo, anime, com.lagradost.cloudstream3.linux.Engine.playables(anime).first())
+            delay(12000)
+            (Playback.active as? BuiltinPlayer)?.seekTo(8000)
+            delay(2500)
+            capture(window, "$prefix-player-skip.png")
+            (Playback.active as? BuiltinPlayer)?.seekTo(102_000)
+            delay(4000)
+            capture(window, "$prefix-player-next.png")
             System.exit(0)
         }
         if (System.getenv("CS_SCREENSHOT_ONLY") == "guide") {
