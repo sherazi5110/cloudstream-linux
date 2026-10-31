@@ -55,6 +55,8 @@ import io.github.sherazi5110.cloudstream.ContentFilter
 import io.github.sherazi5110.cloudstream.Engine
 import io.github.sherazi5110.cloudstream.Library
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.snapshotFlow
 
 /** A title bar with a back arrow, for pushed screens. */
 @Composable
@@ -80,16 +82,21 @@ fun CatalogScreen(screen: Screen.Catalog) {
     val grid = rememberLazyGridState()
     val nearEnd by remember { derivedStateOf { grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 >= items.size - 12 } }
 
-    LaunchedEffect(nearEnd, hasNext, loading, page) {
-        if (api == null || section == null || !hasNext || loading || !nearEnd) return@LaunchedEffect
-        loading = true
-        val response = Engine.homePage(api, section, page + 1)
-        val list = response?.items?.firstOrNull { it.name == screen.title } ?: response?.items?.firstOrNull()
-        val fresh = list?.list.orEmpty().filter(ContentFilter::allows).filter { n -> items.none { it.url == n.url } }
-        items.addAll(fresh)
-        hasNext = response?.hasNext == true && fresh.isNotEmpty()
-        page++
-        loading = false
+    // One loop per screen: wait until the user nears the end, load the next page, repeat until the
+    // extension says there are no more. (Keying an effect on `loading` would cancel its own request.)
+    LaunchedEffect(screen) {
+        if (api == null || section == null) { hasNext = false; return@LaunchedEffect }
+        while (hasNext) {
+            snapshotFlow { nearEnd }.first { it }
+            loading = true
+            val response = Engine.homePage(api, section, page + 1)
+            val list = response?.items?.firstOrNull { it.name == screen.title } ?: response?.items?.firstOrNull()
+            val fresh = list?.list.orEmpty().filter(ContentFilter::allows).filter { n -> items.none { it.url == n.url } }
+            items.addAll(fresh)
+            hasNext = response?.hasNext == true && fresh.isNotEmpty()
+            page++
+            loading = false
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -98,6 +105,9 @@ fun CatalogScreen(screen: Screen.Catalog) {
             horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             items(items, key = { it.url }) { item -> PosterCard(item, 200.dp, Modifier.fillMaxWidth()) { openTitle(item) } }
             if (loading) item(span = { GridItemSpan(maxLineSpan) }) { Spinner(Modifier.fillMaxWidth().height(80.dp)) }
+            if (!loading && !hasNext && items.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                EmptyState("Nothing here", "The extension returned no titles for this catalog.", Modifier.fillMaxWidth())
+            }
         }
     }
 }
