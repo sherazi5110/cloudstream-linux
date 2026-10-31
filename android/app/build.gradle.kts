@@ -15,6 +15,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "7.0.0-alpha1"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -84,4 +85,7 @@ dependencies {
 
     // The player: libVLC for Android (Maven Central), with this app's own controls.
     implementation("org.videolan.android:libvlc-all:3.6.5")
+
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
 }
