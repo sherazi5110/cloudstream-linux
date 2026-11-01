@@ -3,7 +3,7 @@
 Run **CloudStream extensions and Stremio add-ons on Linux, Android phones and Android TV**, from the same repositories the
 official Android app uses, with no changes to the extensions.
 
-**[Download](https://github.com/sherazi5110/cloudstream-linux/releases/latest)** · **[How to install (.deb, Flatpak, .apk)](INSTALL.md)**
+**[Download](https://github.com/sherazi5110/cloudstream-Linxdroid/releases/latest)** · **[How to install (.deb, Flatpak, .apk)](INSTALL.md)**
 
 | Linux | Android |
 |---|---|
@@ -81,7 +81,7 @@ See **[docs/ANALYSIS.md](docs/ANALYSIS.md)** for how the Android app works, and 
 
 The Android app is a new app (not a fork of the official one) with the same look, features and simplicity as the Linux
 app. It's in testing: releases from V7 include `.apk` files, and test builds can be downloaded from the latest
-[Build workflow run](https://github.com/sherazi5110/cloudstream-linux/actions/workflows/build.yml) (artifact
+[Build workflow run](https://github.com/sherazi5110/cloudstream-Linxdroid/actions/workflows/build.yml) (artifact
 `cloudstream-android`). The pictures below are the approved design previews; on landscape tablets and TV the app uses
 the Linux app's icon rail, top bar, banner and title page.
 

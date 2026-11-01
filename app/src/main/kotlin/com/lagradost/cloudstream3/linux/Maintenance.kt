@@ -40,7 +40,7 @@ object SiteOverrides {
 
 /** Checks the project's GitHub releases for a newer version than this one. */
 object Updates {
-    const val REPO = "sherazi5110/cloudstream-linux"
+    const val REPO = "sherazi5110/cloudstream-Linxdroid"
     const val RELEASES = "https://github.com/$REPO/releases/latest"
 
     data class Release(val version: String, val url: String)

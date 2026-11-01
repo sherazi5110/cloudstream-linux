@@ -103,7 +103,7 @@ Read this first when continuing work on CloudStream for Linux.
      (after playback if one is running).
   4. **Home slider** (`HeroSlider` in `ui/HomePage.kt`) and **anti-spoiler** (`DetailsPage.episodeCard`).
   5. **Settings:** searchable Keyboard shortcuts page, Site addresses (`SiteOverrides` in `Maintenance.kt`,
-     applied in `Engine.providers()`), update check (`Updates`, GitHub releases of sherazi5110/cloudstream-linux),
+     applied in `Engine.providers()`), update check (`Updates`, GitHub releases of sherazi5110/cloudstream-Linxdroid),
      reset settings / erase all data.
   6. **"View all" scrolls endlessly** (`GridPage`): next pages load by themselves near the bottom until the
      extension says `hasNext = false` (Demo's "Endless catalog" has 4 pages for testing). **Posters on slow
